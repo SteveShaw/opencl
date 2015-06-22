@@ -20,7 +20,7 @@ using ivec = std::vector<int>;
 constexpr size_t matrix_size = 4;
 constexpr size_t array_size = 32;
 
-constexpr int magic_number = 23;
+constexpr int problem_size = 23;
 
 constexpr const char* kernel_name = "matrix_square";
 constexpr const char* kernel_name_compiler_flag = "compiler_flag";
@@ -193,17 +193,22 @@ void test_opencl() {
                        152, 174, 196, 218,
                        248, 286, 324, 362,
                        344, 398, 452, 506};
-  auto w1 = spawn_cl<ivec (ivec&)>(program::create(kernel_source),
-                                   kernel_name,
-                                   {matrix_size, matrix_size});
+
+  
+  auto w1 = spawn_cl<opencl::out<ivec>, opencl::in<ivec&>>(
+    program::create(kernel_source),
+    kernel_name,
+    {matrix_size, matrix_size}
+  );
   self->send(w1, make_iota_vector<int>(matrix_size * matrix_size));
   self->receive (
     [&](const ivec& result) {
       CAF_CHECK(result == expected1);
     }
   );
-  auto w2 = spawn_cl<ivec (ivec&)>(kernel_source, kernel_name,
-                                   {matrix_size, matrix_size});
+  auto w2 = spawn_cl<opencl::out<ivec>, opencl::in<ivec&>>(kernel_source,
+                                                           kernel_name,
+                                                           {matrix_size, matrix_size});
   self->send(w2, make_iota_vector<int>(matrix_size * matrix_size));
   self->receive (
     [&](const ivec& result) {
@@ -221,15 +226,17 @@ void test_opencl() {
   auto map_res = [](ivec& result) -> message {
     return make_message(matrix_type{std::move(result)});
   };
-  auto w3 = spawn_cl<ivec (ivec&)>(program::create(kernel_source), kernel_name,
-                                   map_arg, map_res, {matrix_size, matrix_size});
+  auto w3 = spawn_cl<opencl::out<ivec>, opencl::in<ivec&>>(program::create(kernel_source),
+                                                           kernel_name,
+                                                           map_arg, map_res,
+                                                           {matrix_size, matrix_size});
   self->send(w3, make_iota_matrix<matrix_size>());
   self->receive (
     [&](const matrix_type& result) {
       CAF_CHECK(expected2 == result);
     }
   );
-  auto w4 = spawn_cl<ivec (ivec&)>(kernel_source, kernel_name,
+  auto w4 = spawn_cl<opencl::out<ivec>, opencl::in<ivec&>>(kernel_source, kernel_name,
                                    map_arg, map_res,
                                    {matrix_size, matrix_size});
   self->send(w4, make_iota_matrix<matrix_size>());
@@ -247,7 +254,9 @@ void test_opencl() {
   }
   // test for opencl compiler flags
   auto prog5 = program::create(kernel_source_compiler_flag, compiler_flag);
-  auto w5 = spawn_cl<ivec (ivec&)>(prog5, kernel_name_compiler_flag, {array_size});
+  auto w5 = spawn_cl<opencl::out<ivec>, opencl::in<ivec&>>(prog5,
+                                                           kernel_name_compiler_flag,
+                                                           {array_size});
   self->send(w5, make_iota_vector<int>(array_size));
   auto expected3 = make_iota_vector<int>(array_size);
   self->receive (
@@ -266,7 +275,8 @@ void test_opencl() {
   ivec arr6(static_cast<size_t>(reduce_buffer_size));
   int n = static_cast<int>(arr6.capacity());
   std::generate(arr6.begin(), arr6.end(), [&]{ return --n; });
-  auto w6 = spawn_cl<ivec (ivec&)>(kernel_source_reduce, kernel_name_reduce,
+  auto w6 = spawn_cl<opencl::out<ivec>, opencl::in<ivec&>>(kernel_source_reduce,
+                                   kernel_name_reduce,
                                    {static_cast<size_t>(reduce_global_size)},
                                    {},
                                    {static_cast<size_t>(reduce_local_size)},
@@ -282,12 +292,13 @@ void test_opencl() {
     }
   );
   // constant memory arguments
-  const ivec arr7{magic_number};
-  auto w7 = spawn_cl<ivec (ivec&)>(kernel_source_const, kernel_name_const,
-                                   {magic_number});
+  const ivec arr7{problem_size};
+  auto w7 = spawn_cl<opencl::out<ivec>, opencl::in<ivec&>>(kernel_source_const,
+                                                           kernel_name_const,
+                                                           {problem_size});
   self->send(w7, move(arr7));
-  ivec expected5(magic_number);
-  fill(begin(expected5), end(expected5), magic_number);
+  ivec expected5(problem_size);
+  fill(begin(expected5), end(expected5), problem_size);
   self->receive(
     [&](const ivec& result) {
       CAF_CHECK(result == expected5);
