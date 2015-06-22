@@ -29,6 +29,7 @@
 #include "caf/detail/limited_vector.hpp"
 
 #include "caf/opencl/global.hpp"
+#include "caf/opencl/arguments.hpp"
 #include "caf/opencl/actor_facade.hpp"
 #include "caf/opencl/opencl_metainfo.hpp"
 

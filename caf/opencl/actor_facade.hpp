@@ -49,25 +49,31 @@ class opencl_metainfo;
 template <class Signature>
 class actor_facade;
 
-template <class Ret, typename... Args>
-class actor_facade<Ret(Args...)> : public abstract_actor {
-
-  friend class command<actor_facade, Ret>;
+template <typename... Args>
+class actor_facade<Args...> : public abstract_actor {
 
 public:
-  using arg_types = detail::type_list<typename std::decay<Args>::type...>;
-  using arg_mapping = std::function<optional<message> (message&)>;
-  using result_mapping = std::function<message(Ret&)>;
+  using input_wrapped_types = detail::tl_filter<Args..., is_input_arg>;
+  using input_types = detail::tl_map<input_wrapped_types, extract_type>; // was arg_types
+  using input_mapping = std::function<optional<message> (message&)>; // was arg_mapping
+  using output_wrapped_types = detail::tl_filter<Args..., is_output_arg>;
+  using output_types = detail::tl_map<output_wrapped_types, extract_type>;
+  using output_mapping = std::function<message(output_types...)>; // was result_mapping
+  using sized_types = detail::tl_filter<Args..., requires_size_arg>;
   using evnt_vec = std::vector<cl_event>;
   using args_vec = std::vector<mem_ptr>;
-  using command_type = command<actor_facade, Ret>;
+  using size_vec = std::vector<size_t>;
+  using command_type = command<actor_facade, output_types>;
+
+  // does this work?
+  friend class command<actor_facade, output_types>;
 
   static intrusive_ptr<actor_facade>
   create(const program& prog, const char* kernel_name,
          const dim_vec& global_dims, const dim_vec& offsets,
          const dim_vec& local_dims, size_t result_size,
-         arg_mapping map_args = arg_mapping{},
-         result_mapping map_result = result_mapping{}) {
+         input_mapping map_args = input_mapping{},
+         output_mapping map_result = output_mapping{}) {
     if (global_dims.empty()) {
       auto str = "OpenCL kernel needs at least 1 global dimension.";
       CAF_LOGF_ERROR(str);
@@ -88,12 +94,12 @@ public:
     kernel.reset(v2get(CAF_CLF(clCreateKernel), prog.program_.get(),
                        kernel_name),
                  false);
-    if (result_size == 0) {
-      result_size = std::accumulate(global_dims.begin(), global_dims.end(),
-                                    size_t{1}, std::multiplies<size_t>{});
-    }
+    auto default_size = std::accumulate(global_dims.begin(), global_dims.end(),
+                                        size_t{1}, std::multiplies<size_t>{});
+    std::vector<size_t> result_sizes;
+    create_vector_with_sizes<sized_types>(result_sizes, default_size);
     return new actor_facade(prog, kernel, global_dims, offsets, local_dims,
-                            result_size, std::move(map_args),
+                            std::move(result_size), std::move(map_args),
                             std::move(map_result));
   }
 
@@ -107,19 +113,19 @@ public:
       }
       content = std::move(*mapped);
     }
-    typename detail::il_indices<arg_types>::type indices;
-    if (! content.match_elements(arg_types{})) {
+    typename detail::il_indices<input_types>::type indices;
+    if (! content.match_elements(input_types{})) {
       return;
     }
     response_promise handle{this->address(), sender, mid.response_id()};
     evnt_vec events;
     args_vec arguments;
-    add_arguments_to_kernel<Ret>(events, arguments, result_size_,
-                                 content, indices);
+//    add_arguments_to_kernel<Ret>(events, arguments, result_sizes_,
+//                                 content, indices);
     auto cmd = make_counted<command_type>(handle, this,
                                           std::move(events),
                                           std::move(arguments),
-                                          result_size_,
+                                          result_sizes_,
                                           std::move(content));
     cmd->enqueue();
   }
@@ -127,8 +133,8 @@ public:
 private:
   actor_facade(const program& prog, kernel_ptr kernel,
                const dim_vec& global_dimensions, const dim_vec& global_offsets,
-               const dim_vec& local_dimensions, size_t result_size,
-               arg_mapping map_args, result_mapping map_result)
+               const dim_vec& local_dimensions, std::vector<size_t> result_sizes,
+               input_mapping map_args, output_mapping map_result)
       : kernel_(kernel),
         program_(prog.program_),
         context_(prog.context_),
@@ -136,54 +142,88 @@ private:
         global_dimensions_(global_dimensions),
         global_offsets_(global_offsets),
         local_dimensions_(local_dimensions),
-        result_size_(result_size),
+        result_sizes_(std::move(result_sizes)),
         map_args_(std::move(map_args)),
         map_result_(std::move(map_result)) {
     CAF_LOG_TRACE("id: " << this->id());
   }
 
-  void add_arguments_to_kernel_rec(evnt_vec&, args_vec& arguments, message&,
-                                   detail::int_list<>) {
-    // rotate left (output buffer to the end)
-    std::rotate(arguments.begin(), arguments.begin() + 1, arguments.end());
-    for (cl_uint i = 0; i < arguments.size(); ++i) {
-      v1callcl(CAF_CLF(clSetKernelArg), kernel_.get(), i,
-               sizeof(cl_mem), static_cast<void*>(&arguments[i]));
-    }
-    clFlush(queue_.get());
+//  void add_arguments_to_kernel_rec(evnt_vec&, args_vec& arguments, message&,
+//                                   detail::int_list<>) {
+//    // rotate left (output buffer to the end)
+//    std::rotate(arguments.begin(), arguments.begin() + 1, arguments.end());
+//    for (cl_uint i = 0; i < arguments.size(); ++i) {
+//      v1callcl(CAF_CLF(clSetKernelArg), kernel_.get(), i,
+//               sizeof(cl_mem), static_cast<void*>(&arguments[i]));
+//    }
+//    clFlush(queue_.get());
+//  }
+//
+//  template <long I, long... Is>
+//  void add_arguments_to_kernel_rec(evnt_vec& events, args_vec& arguments,
+//                                   message& msg, detail::int_list<I, Is...>) {
+//    using value_type = typename detail::tl_at<input_types, I>::type;
+//    auto& arg = msg.get_as<value_type>(I);
+//    size_t buffer_size = sizeof(value_type) * arg.size();
+//    auto buffer = v2get(CAF_CLF(clCreateBuffer), context_.get(),
+//                        cl_mem_flags{CL_MEM_READ_ONLY}, buffer_size, nullptr);
+//    cl_event event = v1get<cl_event>(CAF_CLF(clEnqueueWriteBuffer),
+//                                     queue_.get(), buffer, cl_bool{CL_FALSE},
+//                                     cl_uint{0}, buffer_size, arg.data());
+//    events.push_back(std::move(event));
+//    mem_ptr tmp;
+//    tmp.reset(buffer, false);
+//    arguments.push_back(tmp);
+//    add_arguments_to_kernel_rec(events, arguments, msg,
+//                                detail::int_list<Is...>{});
+//  }
+//
+//  template <class R, class Token>
+//  void add_arguments_to_kernel(evnt_vec& events, args_vec& arguments,
+//                               size_t ret_size, message& msg, Token tk) {
+//    arguments.clear();
+//    auto buf = v2get(CAF_CLF(clCreateBuffer), context_.get(),
+//                     cl_mem_flags{CL_MEM_WRITE_ONLY},
+//                     sizeof(typename R::value_type) * ret_size, nullptr);
+//    mem_ptr tmp;
+//    tmp.reset(buf, false);
+//    arguments.push_back(tmp);
+//    add_arguments_to_kernel_rec(events, arguments, msg, tk);
+//  }
+
+  void create_mem_buffers(evnt_vec& events, args_vec& args, size_vec& sizes) {
+    
   }
 
-  template <long I, long... Is>
-  void add_arguments_to_kernel_rec(evnt_vec& events, args_vec& arguments,
-                                   message& msg, detail::int_list<I, Is...>) {
-    using value_type = typename detail::tl_at<arg_types, I>::type;
-    auto& arg = msg.get_as<value_type>(I);
-    size_t buffer_size = sizeof(value_type) * arg.size();
-    auto buffer = v2get(CAF_CLF(clCreateBuffer), context_.get(),
-                        cl_mem_flags{CL_MEM_READ_ONLY}, buffer_size, nullptr);
-    cl_event event = v1get<cl_event>(CAF_CLF(clEnqueueWriteBuffer),
-                                     queue_.get(), buffer, cl_bool{CL_FALSE},
-                                     cl_uint{0}, buffer_size, arg.data());
-    events.push_back(std::move(event));
-    mem_ptr tmp;
-    tmp.reset(buffer, false);
-    arguments.push_back(tmp);
-    add_arguments_to_kernel_rec(events, arguments, msg,
-                                detail::int_list<Is...>{});
+  template <class T, class... Ts>
+  void create_mem_buffers(evnt_vec& events, args_vec& args, size_vec& sizes) {
+    
   }
 
-  template <class R, class Token>
-  void add_arguments_to_kernel(evnt_vec& events, args_vec& arguments,
-                               size_t ret_size, message& msg, Token tk) {
-    arguments.clear();
-    auto buf = v2get(CAF_CLF(clCreateBuffer), context_.get(),
-                     cl_mem_flags{CL_MEM_WRITE_ONLY},
-                     sizeof(typename R::value_type) * ret_size, nullptr);
-    mem_ptr tmp;
-    tmp.reset(buf, false);
-    arguments.push_back(tmp);
-    add_arguments_to_kernel_rec(events, arguments, msg, tk);
+  template <class T>
+  void create_buffer(const in<T>& arg) {
+  
   }
+
+  template <class T>
+  void create_buffer(const in_out<T>& arg) {
+  
+  }
+  
+  template <class T>
+  void create_buffer(const out<T>& arg) {
+  
+  }
+
+//  template <class T, class... Ts>
+//  void create_mem_buffers(evnt_vec& events, args_vec& args, size_vec& sizes) {
+//    
+//  }
+//
+//  template <class T, class... Ts>
+//  void create_mem_buffers(evnt_vec& events, args_vec& args, size_vec& sizes) {
+//    
+//  }
 
   kernel_ptr kernel_;
   program_ptr program_;
@@ -192,9 +232,9 @@ private:
   dim_vec global_dimensions_;
   dim_vec global_offsets_;
   dim_vec local_dimensions_;
-  size_t result_size_;
-  arg_mapping map_args_;
-  result_mapping map_result_;
+  std::vector<size_t> result_sizes_;
+  input_mapping map_args_;
+  output_mapping map_result_;
 };
 
 } // namespace opencl
