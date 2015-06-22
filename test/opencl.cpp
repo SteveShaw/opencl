@@ -194,21 +194,18 @@ void test_opencl() {
                        248, 286, 324, 362,
                        344, 398, 452, 506};
 
-  
-  auto w1 = spawn_cl<opencl::out<ivec>, opencl::in<ivec&>>(
-    program::create(kernel_source),
-    kernel_name,
-    {matrix_size, matrix_size}
-  );
+  opencl::spawn_config cfg1{{matrix_size, matrix_size}};
+  auto w1 = spawn_cl(program::create(kernel_source), kernel_name, cfg1,
+                     opencl::in<ivec>, opencl::out<ivec>{});
   self->send(w1, make_iota_vector<int>(matrix_size * matrix_size));
   self->receive (
     [&](const ivec& result) {
       CAF_CHECK(result == expected1);
     }
   );
-  auto w2 = spawn_cl<opencl::out<ivec>, opencl::in<ivec&>>(kernel_source,
-                                                           kernel_name,
-                                                           {matrix_size, matrix_size});
+  opencl::spawn_config cfg2{{matrix_size, matrix_size}};
+  auto w2 = spawn_cl(kernel_source, kernel_name, cfg2,
+                     opencl::in<ivec>{}, opencl::out<ivec>{});
   self->send(w2, make_iota_vector<int>(matrix_size * matrix_size));
   self->receive (
     [&](const ivec& result) {
@@ -226,19 +223,20 @@ void test_opencl() {
   auto map_res = [](ivec& result) -> message {
     return make_message(matrix_type{std::move(result)});
   };
-  auto w3 = spawn_cl<opencl::out<ivec>, opencl::in<ivec&>>(program::create(kernel_source),
-                                                           kernel_name,
-                                                           map_arg, map_res,
-                                                           {matrix_size, matrix_size});
+  opencl::spawn_config cfg3{{matrix_size, matrix_size}};
+  auto w3 = spawn_cl(program::create(kernel_source), kernel_name, cfg3,
+                     map_arg, map_res,
+                     opencl::in<ivec>{}, opencl::out<ivec>{});
   self->send(w3, make_iota_matrix<matrix_size>());
   self->receive (
     [&](const matrix_type& result) {
       CAF_CHECK(expected2 == result);
     }
   );
-  auto w4 = spawn_cl<opencl::out<ivec>, opencl::in<ivec&>>(kernel_source, kernel_name,
-                                   map_arg, map_res,
-                                   {matrix_size, matrix_size});
+  opencl::spawn_config cfg4{{matrix_size, matrix_size}};
+  auto w4 = spawn_cl(kernel_source, kernel_name, cfg4,
+                     map_arg, map_res,
+                     opencl::in<ivec>{}, opencl::out<ivec&>{});
   self->send(w4, make_iota_matrix<matrix_size>());
   self->receive (
     [&](const matrix_type& result) {
@@ -254,9 +252,9 @@ void test_opencl() {
   }
   // test for opencl compiler flags
   auto prog5 = program::create(kernel_source_compiler_flag, compiler_flag);
-  auto w5 = spawn_cl<opencl::out<ivec>, opencl::in<ivec&>>(prog5,
-                                                           kernel_name_compiler_flag,
-                                                           {array_size});
+  opencl::spawn_config cfg5{{array_size}};
+  auto w5 = spawn_cl(prog5, kernel_name_compiler_flag, cfg5,
+                     opencl::in<ivec>{}, opencl::out<ivec>{});
   self->send(w5, make_iota_vector<int>(array_size));
   auto expected3 = make_iota_vector<int>(array_size);
   self->receive (
@@ -275,12 +273,12 @@ void test_opencl() {
   ivec arr6(static_cast<size_t>(reduce_buffer_size));
   int n = static_cast<int>(arr6.capacity());
   std::generate(arr6.begin(), arr6.end(), [&]{ return --n; });
-  auto w6 = spawn_cl<opencl::out<ivec>, opencl::in<ivec&>>(kernel_source_reduce,
-                                   kernel_name_reduce,
-                                   {static_cast<size_t>(reduce_global_size)},
-                                   {},
-                                   {static_cast<size_t>(reduce_local_size)},
-                                   static_cast<size_t>(reduce_result_size));
+  opencl::spawn_config cfg6{{static_cast<size_t>(reduce_global_size)},
+                            {},
+                            {static_cast<size_t>(reduce_local_size)},
+                            static_cast<size_t>(reduce_result_size)};
+  auto w6 = spawn_cl(kernel_source_reduce, kernel_name_reduce, cfg6,
+                     opencl::in<ivec>{}, opencl::out<ivec>{});
   self->send(w6, move(arr6));
   ivec expected4{max_workgroup_size * 7, max_workgroup_size * 6,
                  max_workgroup_size * 5, max_workgroup_size * 4,
@@ -291,11 +289,16 @@ void test_opencl() {
       CAF_CHECK(result == expected4);
     }
   );
+  // calculator function for getting the size of the output
+  auto get_out_size = [=](const ivec& xs) {
+    return problem_size;
+  };
   // constant memory arguments
   const ivec arr7{problem_size};
-  auto w7 = spawn_cl<opencl::out<ivec>, opencl::in<ivec&>>(kernel_source_const,
-                                                           kernel_name_const,
-                                                           {problem_size});
+  auto w7 = spawn_cl(kernel_source_const, kernel_name_const,
+                     opencl::spawn_config{},
+                     opencl::in<ivec>{},
+                     opencl::out<ivec>{get_out_size});
   self->send(w7, move(arr7));
   ivec expected5(problem_size);
   fill(begin(expected5), end(expected5), problem_size);

@@ -38,8 +38,10 @@
 #include "caf/opencl/global.hpp"
 #include "caf/opencl/command.hpp"
 #include "caf/opencl/program.hpp"
+#include "caf/opencl/arguments.hpp"
 #include "caf/opencl/smart_ptr.hpp"
 #include "caf/opencl/opencl_err.hpp"
+#include "caf/opencl/spawn_config.hpp"
 
 namespace caf {
 namespace opencl {
@@ -70,17 +72,17 @@ public:
 
   static intrusive_ptr<actor_facade>
   create(const program& prog, const char* kernel_name,
-         const dim_vec& global_dims, const dim_vec& offsets,
-         const dim_vec& local_dims, size_t result_size,
-         input_mapping map_args = input_mapping{},
-         output_mapping map_result = output_mapping{}) {
-    if (global_dims.empty()) {
+         const spawn_config& config,
+         input_mapping map_args,
+         output_mapping map_result,
+         Args&&... arguments) {
+    if (config.dimensions().empty()) {
       auto str = "OpenCL kernel needs at least 1 global dimension.";
       CAF_LOGF_ERROR(str);
       throw std::runtime_error(str);
     }
     auto check_vec = [&](const dim_vec& vec, const char* name) {
-      if (! vec.empty() && vec.size() != global_dims.size()) {
+      if (! vec.empty() && vec.size() != config.dimensions().size()) {
         std::ostringstream oss;
         oss << name << " vector is not empty, but "
             << "its size differs from global dimensions vector's size";
@@ -88,19 +90,15 @@ public:
         throw std::runtime_error(oss.str());
       }
     };
-    check_vec(offsets, "offsets");
-    check_vec(local_dims, "local dimensions");
+    check_vec(config.offsets(), "offsets");
+    check_vec(config.local_dimensions(), "local dimensions");
     kernel_ptr kernel;
     kernel.reset(v2get(CAF_CLF(clCreateKernel), prog.program_.get(),
                        kernel_name),
                  false);
-    auto default_size = std::accumulate(global_dims.begin(), global_dims.end(),
-                                        size_t{1}, std::multiplies<size_t>{});
-    std::vector<size_t> result_sizes;
-    create_vector_with_sizes<sized_types>(result_sizes, default_size);
-    return new actor_facade(prog, kernel, global_dims, offsets, local_dims,
-                            std::move(result_size), std::move(map_args),
-                            std::move(map_result));
+    return new actor_facade(prog, kernel, config,
+                            std::move(map_args), std::move(map_result),
+                            std::forward_as_tuple(arguments...));
   }
 
   void enqueue(const actor_addr &sender, message_id mid, message content,
@@ -120,32 +118,35 @@ public:
     response_promise handle{this->address(), sender, mid.response_id()};
     evnt_vec events;
     args_vec arguments;
+    size_vec result_sizes;
 //    add_arguments_to_kernel<Ret>(events, arguments, result_sizes_,
 //                                 content, indices);
     auto cmd = make_counted<command_type>(handle, this,
                                           std::move(events),
                                           std::move(arguments),
-                                          result_sizes_,
+                                          result_sizes,
                                           std::move(content));
     cmd->enqueue();
   }
 
 private:
   actor_facade(const program& prog, kernel_ptr kernel,
-               const dim_vec& global_dimensions, const dim_vec& global_offsets,
-               const dim_vec& local_dimensions, std::vector<size_t> result_sizes,
-               input_mapping map_args, output_mapping map_result)
+               const spawn_config& config,
+               input_mapping map_args, output_mapping map_result,
+               std::tuple<Args...> args)
       : kernel_(kernel),
         program_(prog.program_),
         context_(prog.context_),
         queue_(prog.queue_),
-        global_dimensions_(global_dimensions),
-        global_offsets_(global_offsets),
-        local_dimensions_(local_dimensions),
-        result_sizes_(std::move(result_sizes)),
+        config_(config),
         map_args_(std::move(map_args)),
-        map_result_(std::move(map_result)) {
+        map_result_(std::move(map_result)),
+        arguments_(args) {
     CAF_LOG_TRACE("id: " << this->id());
+    default_output_size_ = std::accumulate(config_.dimensions().begin(),
+                                           config_.dimensions().end(),
+                                           size_t{1},
+                                           std::multiplies<size_t>{});
   }
 
 //  void add_arguments_to_kernel_rec(evnt_vec&, args_vec& arguments, message&,
@@ -158,7 +159,7 @@ private:
 //    }
 //    clFlush(queue_.get());
 //  }
-//
+
 //  template <long I, long... Is>
 //  void add_arguments_to_kernel_rec(evnt_vec& events, args_vec& arguments,
 //                                   message& msg, detail::int_list<I, Is...>) {
@@ -177,7 +178,7 @@ private:
 //    add_arguments_to_kernel_rec(events, arguments, msg,
 //                                detail::int_list<Is...>{});
 //  }
-//
+
 //  template <class R, class Token>
 //  void add_arguments_to_kernel(evnt_vec& events, args_vec& arguments,
 //                               size_t ret_size, message& msg, Token tk) {
@@ -191,50 +192,58 @@ private:
 //    add_arguments_to_kernel_rec(events, arguments, msg, tk);
 //  }
 
-  void create_mem_buffers(evnt_vec& events, args_vec& args, size_vec& sizes) {
-    
+  void create_mem_buffers(evnt_vec&, args_vec&, size_vec&,
+                          message&, unsigned) {
+    clFlush(queue_.get());
   }
 
   template <class T, class... Ts>
-  void create_mem_buffers(evnt_vec& events, args_vec& args, size_vec& sizes) {
-    
+  void create_mem_buffers(evnt_vec& events, args_vec& args, size_vec& sizes,
+                          message& msg, unsigned position) {
+    using arg_type = typename T::type;
+    auto arg = msg.get_as<arg_type>(position);
+    create_buffer<arg_type>(T{}, arg, events, args, sizes, msg, position);
+    create_mem_buffers<Ts...>(events, args, sizes, msg, ++position);
   }
 
   template <class T>
-  void create_buffer(const in<T>& arg) {
-  
+  void create_buffer(const in<T>&, T arg, evnt_vec& events, args_vec& args,
+                     size_vec& sizes, message& msg, unsigned position) {
+
   }
 
   template <class T>
-  void create_buffer(const in_out<T>& arg) {
-  
+  void create_buffer(const in_out<T>&, T arg, evnt_vec& events, args_vec& args,
+                     size_vec& sizes, message& msg, unsigned position) {
+
   }
   
   template <class T>
-  void create_buffer(const out<T>& arg) {
-  
+  void create_buffer(const out<T>& wrapper, T arg, evnt_vec& events, args_vec& args,
+                     size_vec& sizes, message& msg, unsigned position) {
+    auto size = get_size_for_argument(wrapper.size_calculator_, msg, default_output_size_);
+    sizes.push_back(size);
   }
 
-//  template <class T, class... Ts>
-//  void create_mem_buffers(evnt_vec& events, args_vec& args, size_vec& sizes) {
-//    
-//  }
-//
-//  template <class T, class... Ts>
-//  void create_mem_buffers(evnt_vec& events, args_vec& args, size_vec& sizes) {
-//    
-//  }
+  size_t get_size_for_argument(dummy_size_calculator, const message&,
+                               size_t default_size) {
+    return default_size;
+  }
+
+  template <class Fun>
+  size_t get_size_for_argument(Fun f, const message& m, size_t) {
+    return m.apply(f);
+  }
 
   kernel_ptr kernel_;
   program_ptr program_;
   context_ptr context_;
   command_queue_ptr queue_;
-  dim_vec global_dimensions_;
-  dim_vec global_offsets_;
-  dim_vec local_dimensions_;
-  std::vector<size_t> result_sizes_;
+  spawn_config config_;
   input_mapping map_args_;
   output_mapping map_result_;
+  std::tuple<Args&&...> arguments_;
+  size_t default_output_size_;
 };
 
 } // namespace opencl

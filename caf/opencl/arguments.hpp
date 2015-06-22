@@ -21,30 +21,43 @@
 #ifndef CAF_OPENCL_ARGUMENTS
 #define CAF_OPENCL_ARGUMENTS
 
+#include <type_traits>
+
 namespace caf {
 namespace opencl {
 
+/// Use as a default way to calculate output size. 0 will be set to the number
+/// of work items at runtime.
+struct dummy_size_calculator {
+  template <class... Ts>
+  size_t operator()(Ts&&...) const {
+    return 0;
+  }
+};
+
 /// Mark an a spawn_cl template argument as input only
-template <typename Arg>
+template <class Arg>
 struct in {
   using arg_type = typename std::decay<Arg>::type;
 };
 
 /// Mark an a spawn_cl template argument as input and output
-template <typename Arg>
+template <class Arg>
 struct in_out {
   using arg_type = typename std::decay<Arg>::type;
 };
 
 /// Mark an a spawn_cl template argument as output with optional size,
 /// set to 0 the size will be set the number of work items
-template <typename Arg, size_t Size = 0>
+template <class Arg, class SizeCalcultor = dummy_size_calculator>
 struct out {
+  out() { }
+  out(SizeCalcultor cal) : size_calculator_{cal} { }
   using arg_type = typename std::decay<Arg>::type;
-  size_t size = Size;
+  SizeCalcultor size_calculator_;
 };
 
-/// filter type lists for input arguments, in and in_out
+/// Filter type lists for input arguments, in and in_out.
 template <class T>
 struct is_input_arg : std::false_type {};
 
@@ -54,7 +67,7 @@ struct is_input_arg<in<T>> : std::true_type {};
 template <class T>
 struct is_input_arg<in_out<T>> : std::true_type {};
 
-/// filter type lists for output arguments, in_out and out
+/// Filter type lists for output arguments, in_out and out.
 template <class T>
 struct is_output_arg : std::false_type {};
 
@@ -64,41 +77,25 @@ struct is_output_arg<out<T>> : std::true_type {};
 template <class T>
 struct is_output_arg<in_out<T>> : std::true_type {};
 
-// filter for arguments that require size, in this case only out
+/// Filter for arguments that require size, in this case only out.
 template <class T>
 struct requires_size_arg : std::false_type {};
 
 template <class T>
 struct requires_size_arg<out<T>> : std::true_type {};
 
-// extract types
+/// extract types
 template <class T>
 struct extract_type { };
-
 
 template <class T>
 struct extract_type<in<T>> { using type = T; };
 
-
 template <class T>
 struct extract_type<in_out<T>> { using type = T; };
 
-
 template <class T>
 struct extract_type<out<T>> { using type = T; };
-
-
-// extract the sizes of output arguments into a vector
-template<class T, class... Ts>
-void create_vector_with_sizes(std::vector<size_t>& sizes, size_t default_size) {
-  auto size = T::size;
-  sizes.push_back(size == 0 ? default_size : size);
-  create_vector_with_sizes<Ts...>(sizes);
-}
-
-void create_vector_with_sizes(std::vector<size_t>&, size_t) {
-  return;
-}
 
 } // namespace opencl
 } // namespace caf
