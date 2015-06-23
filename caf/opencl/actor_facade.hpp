@@ -56,18 +56,21 @@ class actor_facade<Args...> : public abstract_actor {
 
 public:
   using input_wrapped_types = detail::tl_filter<Args..., is_input_arg>;
-  using input_types = detail::tl_map<input_wrapped_types, extract_type>; // was arg_types
-  using input_mapping = std::function<optional<message> (message&)>; // was arg_mapping
+  using input_types = detail::tl_map<input_wrapped_types, extract_type>;
+  using input_mapping = std::function<optional<message> (message&)>;
+
   using output_wrapped_types = detail::tl_filter<Args..., is_output_arg>;
   using output_types = detail::tl_map<output_wrapped_types, extract_type>;
-  using output_mapping = std::function<message(output_types...)>; // was result_mapping
+  using output_mapping = std::function<message(output_types...)>;
+
   using sized_types = detail::tl_filter<Args..., requires_size_arg>;
+
   using evnt_vec = std::vector<cl_event>;
   using args_vec = std::vector<mem_ptr>;
   using size_vec = std::vector<size_t>;
+
   using command_type = command<actor_facade, output_types>;
 
-  // does this work?
   friend class command<actor_facade, output_types>;
 
   static intrusive_ptr<actor_facade>
@@ -119,8 +122,7 @@ public:
     evnt_vec events;
     args_vec arguments;
     size_vec result_sizes;
-//    add_arguments_to_kernel<Ret>(events, arguments, result_sizes_,
-//                                 content, indices);
+    add_kernel_arguments(events, arguments, result_sizes, content, indices);
     auto cmd = make_counted<command_type>(handle, this,
                                           std::move(events),
                                           std::move(arguments),
@@ -141,7 +143,7 @@ private:
         config_(config),
         map_args_(std::move(map_args)),
         map_result_(std::move(map_result)),
-        arguments_(args) {
+        argument_types_(args) {
     CAF_LOG_TRACE("id: " << this->id());
     default_output_size_ = std::accumulate(config_.dimensions().begin(),
                                            config_.dimensions().end(),
@@ -149,80 +151,72 @@ private:
                                            std::multiplies<size_t>{});
   }
 
-//  void add_arguments_to_kernel_rec(evnt_vec&, args_vec& arguments, message&,
-//                                   detail::int_list<>) {
-//    // rotate left (output buffer to the end)
-//    std::rotate(arguments.begin(), arguments.begin() + 1, arguments.end());
-//    for (cl_uint i = 0; i < arguments.size(); ++i) {
-//      v1callcl(CAF_CLF(clSetKernelArg), kernel_.get(), i,
-//               sizeof(cl_mem), static_cast<void*>(&arguments[i]));
-//    }
-//    clFlush(queue_.get());
-//  }
-
-//  template <long I, long... Is>
-//  void add_arguments_to_kernel_rec(evnt_vec& events, args_vec& arguments,
-//                                   message& msg, detail::int_list<I, Is...>) {
-//    using value_type = typename detail::tl_at<input_types, I>::type;
-//    auto& arg = msg.get_as<value_type>(I);
-//    size_t buffer_size = sizeof(value_type) * arg.size();
-//    auto buffer = v2get(CAF_CLF(clCreateBuffer), context_.get(),
-//                        cl_mem_flags{CL_MEM_READ_ONLY}, buffer_size, nullptr);
-//    cl_event event = v1get<cl_event>(CAF_CLF(clEnqueueWriteBuffer),
-//                                     queue_.get(), buffer, cl_bool{CL_FALSE},
-//                                     cl_uint{0}, buffer_size, arg.data());
-//    events.push_back(std::move(event));
-//    mem_ptr tmp;
-//    tmp.reset(buffer, false);
-//    arguments.push_back(tmp);
-//    add_arguments_to_kernel_rec(events, arguments, msg,
-//                                detail::int_list<Is...>{});
-//  }
-
-//  template <class R, class Token>
-//  void add_arguments_to_kernel(evnt_vec& events, args_vec& arguments,
-//                               size_t ret_size, message& msg, Token tk) {
-//    arguments.clear();
-//    auto buf = v2get(CAF_CLF(clCreateBuffer), context_.get(),
-//                     cl_mem_flags{CL_MEM_WRITE_ONLY},
-//                     sizeof(typename R::value_type) * ret_size, nullptr);
-//    mem_ptr tmp;
-//    tmp.reset(buf, false);
-//    arguments.push_back(tmp);
-//    add_arguments_to_kernel_rec(events, arguments, msg, tk);
-//  }
-
-  void create_mem_buffers(evnt_vec&, args_vec&, size_vec&,
-                          message&, unsigned) {
+  void add_kernel_arguments(evnt_vec&, args_vec& arguments,
+                            size_vec&, message&, unsigned) {
+    for (cl_uint i = 0; i < arguments.size(); ++i) {
+      v1callcl(CAF_CLF(clSetKernelArg), kernel_.get(), i,
+               sizeof(cl_mem), static_cast<void*>(&arguments[i]));
+    }
     clFlush(queue_.get());
   }
 
-  template <class T, class... Ts>
-  void create_mem_buffers(evnt_vec& events, args_vec& args, size_vec& sizes,
-                          message& msg, unsigned position) {
-    using arg_type = typename T::type;
-    auto arg = msg.get_as<arg_type>(position);
-    create_buffer<arg_type>(T{}, arg, events, args, sizes, msg, position);
-    create_mem_buffers<Ts...>(events, args, sizes, msg, ++position);
+  template <long I, long... Is>
+  void add_kernel_arguments(evnt_vec& events, args_vec& arguments,
+                            size_vec& sizes, message& msg,
+                            detail::int_list<I, Is...>) {
+    using value_type = typename detail::tl_at<input_types, I>::type;
+    auto value = msg.get_as<value_type>(I);
+    create_buffer(std::get<I>(argument_types_), value, events, sizes,
+                  arguments, msg);
+    add_kernel_arguments(events, arguments, sizes, msg,
+                         detail::int_list<Is...>{});
   }
 
   template <class T>
-  void create_buffer(const in<T>&, T arg, evnt_vec& events, args_vec& args,
-                     size_vec& sizes, message& msg, unsigned position) {
-
+  void create_buffer(const in<T>&, T value, evnt_vec& events, size_vec&,
+                     args_vec& arguments, message&) {
+    size_t buffer_size = sizeof(T) * value.size();
+    auto buffer = v2get(CAF_CLF(clCreateBuffer), context_.get(),
+                        cl_mem_flags{CL_MEM_READ_ONLY}, buffer_size, nullptr);
+    cl_event event = v1get<cl_event>(CAF_CLF(clEnqueueWriteBuffer),
+                                     queue_.get(), buffer, cl_bool{CL_FALSE},
+                                     cl_uint{0}, buffer_size, value.data());
+    events.push_back(std::move(event));
+    mem_ptr tmp;
+    tmp.reset(buffer, false);
+    arguments.push_back(tmp);
   }
 
   template <class T>
-  void create_buffer(const in_out<T>&, T arg, evnt_vec& events, args_vec& args,
-                     size_vec& sizes, message& msg, unsigned position) {
-
+  void create_buffer(const in_out<T>&, T value, evnt_vec& events, size_vec&,
+                     args_vec& arguments, message&) {
+    size_t buffer_size = sizeof(T) * value.size();
+    auto buffer = v2get(CAF_CLF(clCreateBuffer), context_.get(),
+                        cl_mem_flags{CL_MEM_READ_WRITE}, buffer_size, nullptr);
+    cl_event event = v1get<cl_event>(CAF_CLF(clEnqueueWriteBuffer),
+                                     queue_.get(), buffer, cl_bool{CL_FALSE},
+                                     cl_uint{0}, buffer_size, value.data());
+    events.push_back(std::move(event));
+    mem_ptr tmp;
+    tmp.reset(buffer, false);
+    arguments.push_back(tmp);
   }
   
   template <class T>
-  void create_buffer(const out<T>& wrapper, T arg, evnt_vec& events, args_vec& args,
-                     size_vec& sizes, message& msg, unsigned position) {
-    auto size = get_size_for_argument(wrapper.size_calculator_, msg, default_output_size_);
-    sizes.push_back(size);
+  void create_buffer(const out<T>& wrapper, T value, evnt_vec& events,
+                     size_vec& sizes, args_vec& arguments, message& msg) {
+    auto buffer_size = get_size_for_argument(wrapper.size_calculator_, msg,
+                                             default_output_size_);
+    auto buffer = v2get(CAF_CLF(clCreateBuffer), context_.get(),
+                        cl_mem_flags{CL_MEM_READ_ONLY}, buffer_size, nullptr);
+    cl_event event = v1get<cl_event>(CAF_CLF(clEnqueueWriteBuffer),
+                                     queue_.get(), buffer, cl_bool{CL_FALSE},
+                                     cl_uint{0}, buffer_size, value.data());
+    events.push_back(std::move(event));
+    mem_ptr tmp;
+    tmp.reset(buffer, false);
+    arguments.push_back(tmp);
+    sizes.push_back(buffer_size);
   }
 
   size_t get_size_for_argument(dummy_size_calculator, const message&,
@@ -242,7 +236,7 @@ private:
   spawn_config config_;
   input_mapping map_args_;
   output_mapping map_result_;
-  std::tuple<Args&&...> arguments_;
+  std::tuple<Args&&...> argument_types_;
   size_t default_output_size_;
 };
 

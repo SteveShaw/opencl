@@ -89,13 +89,13 @@ template <class T>
 struct extract_type { };
 
 template <class T>
-struct extract_type<in<T>> { using type = T; };
+struct extract_type<in<T>> { using type = typename std::decay<T>::type; };
 
 template <class T>
-struct extract_type<in_out<T>> { using type = T; };
+struct extract_type<in_out<T>> { using type = typename std::decay<T>::type; };
 
 template <class T>
-struct extract_type<out<T>> { using type = T; };
+struct extract_type<out<T>> { using type = typename std::decay<T>::type; };
 
 } // namespace opencl
 } // namespace caf
