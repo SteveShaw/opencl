@@ -36,25 +36,27 @@
 namespace caf {
 namespace opencl {
 
-template <typename T, typename R>
+template <class FacadeType, class... Ts>
 class command : public ref_counted {
 public:
-  command(response_promise handle, intrusive_ptr<T> actor_facade,
+  command(response_promise handle, intrusive_ptr<FacadeType> actor_facade,
           std::vector<cl_event> events, std::vector<mem_ptr> arguments,
-          size_t result_size, message msg)
-      : result_size_(result_size),
+          std::vector<size_t> result_sizes, message msg)
+      : result_sizes_(result_sizes),
         handle_(handle),
         actor_facade_(actor_facade),
         queue_(actor_facade->queue_),
-        events_(std::move(events)),
+        mem_in_events_(std::move(events)),
         arguments_(std::move(arguments)),
-        result_(result_size),
         msg_(msg) {
     // nop
   }
 
   ~command() {
-    for (auto& e : events_) {
+    for (auto& e : mem_in_events_) {
+      v1callcl(CAF_CLF(clReleaseEvent),e);
+    }
+    for (auto& e : mem_out_events_) {
       v1callcl(CAF_CLF(clReleaseEvent),e);
     }
   }
@@ -75,24 +77,24 @@ public:
       data_or_nullptr(actor_facade_->global_offsets_),
       data_or_nullptr(actor_facade_->global_dimensions_),
       data_or_nullptr(actor_facade_->local_dimensions_),
-      static_cast<cl_uint>(events_.size()),
-      (events_.empty() ? nullptr : events_.data()), &event_k);
+      static_cast<cl_uint>(mem_in_events_.size()),
+      (mem_in_events_.empty() ? nullptr : mem_in_events_.data()), &event_k);
     if (err != CL_SUCCESS) {
       CAF_LOGMF(CAF_ERROR, "clEnqueueNDRangeKernel: " << get_opencl_error(err));
       this->deref(); // or can anything actually happen?
       return;
     } else {
-      cl_event event_r;
-      err =
-        clEnqueueReadBuffer(queue_.get(), arguments_.back().get(), CL_FALSE,
-                            0, sizeof(typename R::value_type) * result_size_,
-                            result_.data(), 1, &event_k, &event_r);
+      mem_out_events_.push_back(std::move(event_k));
+      enqueue_read_buffers<Ts...>(event_k);
+      cl_event marker;
+      err = clEnqueueMarker(queue_.get(), &marker);
+      mem_out_events_.push_back(std::move(marker));
       if (err != CL_SUCCESS) {
-        this->deref(); // failed to enqueue command
-        throw std::runtime_error("clEnqueueReadBuffer: " +
-                                 get_opencl_error(err));
+        CAF_LOGMF(CAF_ERROR, "clSetEventCallback: " << get_opencl_error(err));
+        this->deref(); // callback is not set
+        return;
       }
-      err = clSetEventCallback(event_r, CL_COMPLETE,
+      err = clSetEventCallback(marker, CL_COMPLETE,
                                [](cl_event, cl_int, void* data) {
                                  auto cmd = reinterpret_cast<command*>(data);
                                  cmd->handle_results();
@@ -104,29 +106,49 @@ public:
         this->deref(); // callback is not set
         return;
       }
-
       err = clFlush(queue_.get());
       if (err != CL_SUCCESS) {
         CAF_LOGMF(CAF_ERROR, "clFlush: " << get_opencl_error(err));
       }
-      events_.push_back(std::move(event_k));
-      events_.push_back(std::move(event_r));
     }
   }
 
+  void enqueue_read_buffers(cl_event&, size_t) {
+    // nop
+  }
+
+  template <class R, class... Rs>
+  void enqueue_read_buffers(cl_event& kernel_done, size_t position = 0) {
+      cl_event event;
+      auto size = sizeof(typename R::value_type) * result_sizes_[position];
+      auto err = clEnqueueReadBuffer(queue_.get(), arguments_.back().get(),
+                                     CL_FALSE, 0, size,
+                                     result_buffers_[position].data(), 1,
+                                     &kernel_done, &event);
+      if (err != CL_SUCCESS) {
+        this->deref(); // failed to enqueue command
+        throw std::runtime_error("clEnqueueReadBuffer: " +
+                                 get_opencl_error(err));
+      }
+      mem_out_events_.push_back(std::move(event));
+      enqueue_read_buffers(kernel_done, ++position);
+  }
+
 private:
-  size_t result_size_;
+  std::vector<size_t> result_sizes_;
   response_promise handle_;
-  intrusive_ptr<T> actor_facade_;
+  intrusive_ptr<FacadeType> actor_facade_;
   command_queue_ptr queue_;
-  std::vector<cl_event> events_;
+  std::vector<cl_event> mem_in_events_;
+  std::vector<cl_event> mem_out_events_;
   std::vector<mem_ptr> arguments_;
-  R result_;
+  std::tuple<std::vector<Ts>...> result_buffers_;
   message msg_; // required to keep the argument buffers alive (async copy)
 
   void handle_results() {
     auto& map_fun = actor_facade_->map_result_;
-    auto msg = map_fun ? map_fun(result_) : make_message(std::move(result_));
+    auto msg = map_fun ? map_fun(result_buffers_)
+                       : make_message(std::move(result_buffers_));
     handle_.deliver(std::move(msg));
   }
 };
