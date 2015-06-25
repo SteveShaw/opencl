@@ -196,7 +196,7 @@ void test_opencl() {
 
   opencl::spawn_config cfg1{{matrix_size, matrix_size}};
   auto w1 = spawn_cl(program::create(kernel_source), kernel_name, cfg1,
-                     opencl::in<ivec>, opencl::out<ivec>{});
+                     opencl::in<ivec>{}, opencl::out<ivec>{});
   self->send(w1, make_iota_vector<int>(matrix_size * matrix_size));
   self->receive (
     [&](const ivec& result) {
@@ -275,10 +275,12 @@ void test_opencl() {
   std::generate(arr6.begin(), arr6.end(), [&]{ return --n; });
   opencl::spawn_config cfg6{{static_cast<size_t>(reduce_global_size)},
                             {},
-                            {static_cast<size_t>(reduce_local_size)},
-                            static_cast<size_t>(reduce_result_size)};
+                            {static_cast<size_t>(reduce_local_size)}};
+  auto get_out_size_6 = [=](const ivec&) {
+    return reduce_result_size;
+  };
   auto w6 = spawn_cl(kernel_source_reduce, kernel_name_reduce, cfg6,
-                     opencl::in<ivec>{}, opencl::out<ivec>{});
+                     opencl::in<ivec>{}, opencl::out<ivec>(get_out_size_6));
   self->send(w6, move(arr6));
   ivec expected4{max_workgroup_size * 7, max_workgroup_size * 6,
                  max_workgroup_size * 5, max_workgroup_size * 4,
@@ -290,7 +292,7 @@ void test_opencl() {
     }
   );
   // calculator function for getting the size of the output
-  auto get_out_size = [=](const ivec& xs) {
+  auto get_out_size_7 = [=](const ivec&) {
     return problem_size;
   };
   // constant memory arguments
@@ -298,7 +300,7 @@ void test_opencl() {
   auto w7 = spawn_cl(kernel_source_const, kernel_name_const,
                      opencl::spawn_config{},
                      opencl::in<ivec>{},
-                     opencl::out<ivec>{get_out_size});
+                     opencl::out<ivec>{get_out_size_7});
   self->send(w7, move(arr7));
   ivec expected5(problem_size);
   fill(begin(expected5), end(expected5), problem_size);

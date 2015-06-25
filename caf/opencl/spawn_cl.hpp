@@ -38,29 +38,36 @@ namespace caf {
 namespace detail {
 
 // converts C arrays, i.e., pointers, to vectors
-template <typename T>
+template <class T>
 struct carr_to_vec {
   using type = T;
 };
 
-template <typename T>
+template <class T>
 struct carr_to_vec<T*> {
   using type = std::vector<T>;
 };
 
-template <class Signature>
-struct cl_spawn_helper;
+template <class... Ts>
+struct cl_spawn_helper {
+  using impl = opencl::actor_facade<typename carr_to_vec<Ts>::type...>;
+  using map_in_fun = std::function<optional<message> (message&)>;
+  using map_out_fun = typename impl::output_mapping;
 
-template <typename R, typename... Ts>
-struct cl_spawn_helper<R(Ts...)> {
-  using res_t = typename carr_to_vec<R>::type;
-  using impl = opencl::actor_facade<res_t (typename carr_to_vec<Ts>::type...)>;
-  using map_arg_fun = std::function<optional<message> (message&)>;
-  using map_res_fun = typename impl::result_mapping;
+  actor operator()(const opencl::program& p, const char* fn,
+                   const opencl::spawn_config& cfg, Ts&&... ts) const {
+    return actor_cast<actor>(impl::create(p, fn, cfg, map_in_fun{},
+                                          map_out_fun{},
+                                          std::forward<Ts>(ts)...));
+  }
 
-  template <typename... Us>
-  actor operator()(const opencl::program& p, const char* fn, Us&&... vs) const {
-    return actor_cast<actor>(impl::create(p, fn, std::forward<Us>(vs)...));
+  actor operator()(const opencl::program& p, const char* fn,
+                   const opencl::spawn_config& cfg,
+                   map_in_fun map_input, map_out_fun map_output,
+                   Ts&&... ts) const {
+    return actor_cast<actor>(impl::create(p, fn, cfg, std::move(map_input),
+                                          std::move(map_output),
+                                          std::forward<Ts>(ts)...));
   }
 };
 
@@ -70,15 +77,13 @@ struct cl_spawn_helper<R(Ts...)> {
 /// the function named `fname` from `prog`.
 /// @throws std::runtime_error if more than three dimensions are set,
 ///                            `dims.empty()`, or `clCreateKernel` failed.
-template <class Signature>
+template <class... Args>
 actor spawn_cl(const opencl::program& prog,
                const char* fname,
-               const opencl::dim_vec& dims,
-               const opencl::dim_vec& offset = {},
-               const opencl::dim_vec& local_dims = {},
-               size_t result_size = 0) {
-  detail::cl_spawn_helper<Signature> f;
-  return f(prog, fname, dims, offset, local_dims, result_size);
+               const opencl::spawn_config& config,
+               Args... args) {
+  detail::cl_spawn_helper<Args...> f;
+  return f(prog, fname, config, std::forward<Args>(args)...);
 }
 
 /// Compiles `source` and creates a new actor facade for an OpenCL kernel
@@ -86,33 +91,30 @@ actor spawn_cl(const opencl::program& prog,
 /// @throws std::runtime_error if more than three dimensions are set,
 ///                            <tt>dims.empty()</tt>, a compilation error
 ///                            occured, or @p clCreateKernel failed.
-template <class Signature>
+template <class... Args>
 actor spawn_cl(const char* source,
                const char* fname,
-               const opencl::dim_vec& dims,
-               const opencl::dim_vec& offset = {},
-               const opencl::dim_vec& local_dims = {},
-               size_t result_size = 0) {
-  return spawn_cl<Signature>(opencl::program::create(source), fname,
-                             dims, offset, local_dims, result_size);
+               const opencl::spawn_config& config,
+               Args... args) {
+  detail::cl_spawn_helper<Args...> f;
+  return f(opencl::program::create(source), fname, config,
+           std::forward<Args>(args)...);
 }
 
 /// Creates a new actor facade for an OpenCL kernel that invokes
 /// the function named `fname` from `prog`.
 /// @throws std::runtime_error if more than three dimensions are set,
 ///                            `dims.empty()`, or `clCreateKernel` failed.
-template <class Signature, class Fun>
+template <class Fun, class... Args>
 actor spawn_cl(const opencl::program& prog,
                const char* fname,
                std::function<optional<message> (message&)> map_args,
                Fun map_result,
-               const opencl::dim_vec& dims,
-               const opencl::dim_vec& offset = {},
-               const opencl::dim_vec& local_dims = {},
-               size_t result_size = 0) {
-  detail::cl_spawn_helper<Signature> f;
-  return f(prog, fname, dims, offset, local_dims, result_size,
-           std::move(map_args), std::move(map_result));
+               const opencl::spawn_config& config,
+               Args... args) {
+  detail::cl_spawn_helper<Args...> f;
+  return f(prog, fname, config, std::move(map_args), std::move(map_result),
+           std::forward<Args>(args)...);
 }
 
 /// Compiles `source` and creates a new actor facade for an OpenCL kernel
@@ -120,18 +122,17 @@ actor spawn_cl(const opencl::program& prog,
 /// @throws std::runtime_error if more than three dimensions are set,
 ///                            <tt>dims.empty()</tt>, a compilation error
 ///                            occured, or @p clCreateKernel failed.
-template <class Signature, class Fun>
+template <class Fun, class... Args>
 actor spawn_cl(const char* source,
                const char* fname,
                std::function<optional<message> (message&)> map_args,
                Fun map_result,
-               const opencl::dim_vec& dims,
-               const opencl::dim_vec& offset = {},
-               const opencl::dim_vec& local_dims = {},
-               size_t result_size = 0) {
-  detail::cl_spawn_helper<Signature> f;
-  return f(opencl::program::create(source), fname, dims, offset, local_dims,
-           result_size, std::move(map_args), std::move(map_result));
+               const opencl::spawn_config& config,
+               Args... args) {
+  detail::cl_spawn_helper<Args...> f;
+  return f(opencl::program::create(source), fname, config,
+           std::move(map_args), std::move(map_result),
+           std::forward<Args>(args)...);
 }
 
 } // namespace caf

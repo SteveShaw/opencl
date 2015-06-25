@@ -48,22 +48,24 @@ namespace opencl {
 
 class opencl_metainfo;
 
-template <class Signature>
-class actor_facade;
+//template <class Signature>
+//class actor_facade;
 
-template <typename... Args>
-class actor_facade<Args...> : public abstract_actor {
+template <class... Args>
+class actor_facade : public abstract_actor {
 
 public:
-  using input_wrapped_types = detail::tl_filter<Args..., is_input_arg>;
+  using arg_types = detail::type_list<typename std::decay<Args>::type...>;
+
+  using input_wrapped_types = detail::tl_filter<arg_types, is_input_arg>;
   using input_types = detail::tl_map<input_wrapped_types, extract_type>;
   using input_mapping = std::function<optional<message> (message&)>;
 
-  using output_wrapped_types = detail::tl_filter<Args..., is_output_arg>;
+  using output_wrapped_types = detail::tl_filter<arg_types, is_output_arg>;
   using output_types = detail::tl_map<output_wrapped_types, extract_type>;
   using output_mapping = std::function<message(output_types...)>;
 
-  using sized_types = detail::tl_filter<Args..., requires_size_arg>;
+  using sized_types = detail::tl_filter<arg_types, requires_size_arg>;
 
   using evnt_vec = std::vector<cl_event>;
   using args_vec = std::vector<mem_ptr>;

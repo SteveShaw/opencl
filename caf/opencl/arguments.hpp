@@ -21,7 +21,11 @@
 #ifndef CAF_OPENCL_ARGUMENTS
 #define CAF_OPENCL_ARGUMENTS
 
+#include <functional>
 #include <type_traits>
+
+#include "caf/message.hpp"
+#include "caf/optional.hpp"
 
 namespace caf {
 namespace opencl {
@@ -47,14 +51,25 @@ struct in_out {
   using arg_type = typename std::decay<Arg>::type;
 };
 
-/// Mark an a spawn_cl template argument as output with optional size,
-/// set to 0 the size will be set the number of work items
-template <class Arg, class SizeCalcultor = dummy_size_calculator>
+template <class Arg>
 struct out {
   out() { }
-  out(SizeCalcultor cal) : size_calculator_{cal} { }
-  using arg_type = typename std::decay<Arg>::type;
-  SizeCalcultor size_calculator_;
+  template <class F>
+  out(F fun) {
+    fun_ = [fun](message& msg) -> optional<size_t> {
+      auto res = msg.apply(fun);
+      size_t result;
+      if (res) {
+        res->apply([&](size_t x) { result = x; });
+        return result;
+      }
+      return none;
+    };
+  }
+  optional<size_t> operator()(const message& msg) {
+    return fun_ ? fun_(msg) : 0;
+  }
+  std::function<optional<size_t> (message&)> fun_;
 };
 
 /// Filter type lists for input arguments, in and in_out.

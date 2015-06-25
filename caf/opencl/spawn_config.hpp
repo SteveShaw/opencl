@@ -27,9 +27,9 @@ namespace opencl {
 
 class spawn_config {
 public:
-  spawn_config(const opencl::dim_vec& dims = {},
-               const opencl::dim_vec& offset = {},
-               const opencl::dim_vec& local_dims = {})
+  spawn_config(const opencl::dim_vec& dims,
+               const opencl::dim_vec& offset,
+               const opencl::dim_vec& local_dims)
     : dims_{dims},
       offset_{offset},
       local_dims_{local_dims} {

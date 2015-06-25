@@ -28,13 +28,13 @@
 namespace caf {
 namespace opencl {
 
-template <typename Signature>
+template <class... Ts>
 class actor_facade;
 
 /// @brief A wrapper for OpenCL's cl_program.
 class program {
 
-  template <typename Signature>
+  template <class... Ts>
   friend class actor_facade;
 
 public:
