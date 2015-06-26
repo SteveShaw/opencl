@@ -20,6 +20,7 @@
 #ifndef CAF_OPENCL_COMMAND_HPP
 #define CAF_OPENCL_COMMAND_HPP
 
+#include <tuple>
 #include <vector>
 #include <numeric>
 #include <algorithm>
@@ -73,10 +74,10 @@ public:
     // OpenCL expects cl_uint (unsigned int), hence the cast
     cl_int err = clEnqueueNDRangeKernel(
       queue_.get(), actor_facade_->kernel_.get(),
-      static_cast<cl_uint>(actor_facade_->global_dimensions_.size()),
-      data_or_nullptr(actor_facade_->global_offsets_),
-      data_or_nullptr(actor_facade_->global_dimensions_),
-      data_or_nullptr(actor_facade_->local_dimensions_),
+      static_cast<cl_uint>(actor_facade_->config_.dimensions().size()),
+      data_or_nullptr(actor_facade_->config_.offsets()),
+      data_or_nullptr(actor_facade_->config_.dimensions()),
+      data_or_nullptr(actor_facade_->config_.local_dimensions()),
       static_cast<cl_uint>(mem_in_events_.size()),
       (mem_in_events_.empty() ? nullptr : mem_in_events_.data()), &event_k);
     if (err != CL_SUCCESS) {
@@ -85,7 +86,7 @@ public:
       return;
     } else {
       mem_out_events_.push_back(std::move(event_k));
-      enqueue_read_buffers<Ts...>(event_k);
+//      enqueue_read_buffers<Ts...>(event_k);
       cl_event marker;
       err = clEnqueueMarker(queue_.get(), &marker);
       mem_out_events_.push_back(std::move(marker));
@@ -113,25 +114,27 @@ public:
     }
   }
 
-  void enqueue_read_buffers(cl_event&, size_t) {
+  void enqueue_read_buffers(cl_event&, detail::int_list<>) {
     // nop
   }
 
-  template <class R, class... Rs>
-  void enqueue_read_buffers(cl_event& kernel_done, size_t position = 0) {
-      cl_event event;
-      auto size = sizeof(typename R::value_type) * result_sizes_[position];
-      auto err = clEnqueueReadBuffer(queue_.get(), arguments_.back().get(),
-                                     CL_FALSE, 0, size,
-                                     result_buffers_[position].data(), 1,
-                                     &kernel_done, &event);
-      if (err != CL_SUCCESS) {
-        this->deref(); // failed to enqueue command
-        throw std::runtime_error("clEnqueueReadBuffer: " +
-                                 get_opencl_error(err));
-      }
-      mem_out_events_.push_back(std::move(event));
-      enqueue_read_buffers(kernel_done, ++position);
+  template <long I, long... Is>
+  void enqueue_read_buffers(cl_event& kernel_done, detail::int_list<I, Is...>) {
+    using value_type = typename std::tuple_element<I, std::tuple<std::vector<Ts>...>>::type;
+    cl_event event;
+    auto size = sizeof(value_type) * result_sizes_[I];
+    std::get<I>(result_buffers_).resize(size);
+    auto err = clEnqueueReadBuffer(queue_.get(), arguments_.back().get(),
+                                   CL_FALSE, 0, size,
+                                   std::get<I>(result_buffers_).data(),
+                                   1, &kernel_done, &event);
+    if (err != CL_SUCCESS) {
+      this->deref(); // failed to enqueue command
+      throw std::runtime_error("clEnqueueReadBuffer: " +
+                               get_opencl_error(err));
+    }
+    mem_out_events_.push_back(std::move(event));
+    enqueue_read_buffers(kernel_done, detail::int_list<Is...>{});
   }
 
 private:
@@ -142,12 +145,12 @@ private:
   std::vector<cl_event> mem_in_events_;
   std::vector<cl_event> mem_out_events_;
   std::vector<mem_ptr> arguments_;
-  std::tuple<std::vector<Ts>...> result_buffers_;
+  std::tuple<Ts...> result_buffers_;
   message msg_; // required to keep the argument buffers alive (async copy)
 
   void handle_results() {
-    auto& map_fun = actor_facade_->map_result_;
-    auto msg = map_fun ? map_fun(result_buffers_)
+    auto& map_fun = actor_facade_->map_results_;
+    auto msg = map_fun ? apply_args(map_fun, detail::get_indices(result_buffers_), result_buffers_)
                        : make_message(std::move(result_buffers_));
     handle_.deliver(std::move(msg));
   }

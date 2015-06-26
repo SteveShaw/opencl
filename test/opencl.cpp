@@ -194,8 +194,8 @@ void test_opencl() {
                        248, 286, 324, 362,
                        344, 398, 452, 506};
 
-  opencl::spawn_config cfg1{{matrix_size, matrix_size}};
-  auto w1 = spawn_cl(program::create(kernel_source), kernel_name, cfg1,
+  auto w1 = spawn_cl(program::create(kernel_source), kernel_name,
+                     opencl::spawn_config{{matrix_size, matrix_size}},
                      opencl::in<ivec>{}, opencl::out<ivec>{});
   self->send(w1, make_iota_vector<int>(matrix_size * matrix_size));
   self->receive (

@@ -72,6 +72,18 @@ struct out {
   std::function<optional<size_t> (message&)> fun_;
 };
 
+
+///Cconverts C arrays, i.e., pointers, to vectors.
+template <class T>
+struct carr_to_vec {
+  using type = T;
+};
+
+template <class T>
+struct carr_to_vec<T*> {
+  using type = std::vector<T>;
+};
+
 /// Filter type lists for input arguments, in and in_out.
 template <class T>
 struct is_input_arg : std::false_type {};
@@ -104,13 +116,19 @@ template <class T>
 struct extract_type { };
 
 template <class T>
-struct extract_type<in<T>> { using type = typename std::decay<T>::type; };
+struct extract_type<in<T>> {
+  using type = typename std::decay<typename carr_to_vec<T>::type>::type;
+};
 
 template <class T>
-struct extract_type<in_out<T>> { using type = typename std::decay<T>::type; };
+struct extract_type<in_out<T>> {
+  using type = typename std::decay<typename carr_to_vec<T>::type>::type;
+};
 
 template <class T>
-struct extract_type<out<T>> { using type = typename std::decay<T>::type; };
+struct extract_type<out<T>> {
+  using type = typename std::decay<typename carr_to_vec<T>::type>::type;
+};
 
 } // namespace opencl
 } // namespace caf
