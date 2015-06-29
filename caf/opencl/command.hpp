@@ -86,9 +86,14 @@ public:
       return;
     } else {
       mem_out_events_.push_back(std::move(event_k));
-//      enqueue_read_buffers<Ts...>(event_k);
+      enqueue_read_buffers(event_k, detail::get_indices(result_buffers_));
       cl_event marker;
+#if defined (CL_VERSION_1_2)
+      err = clEnqueueMarkerWithWaitList(queue_.get(), mem_out_events_.size(),
+                                        mem_out_events_.data(), &marker);
+#else
       err = clEnqueueMarker(queue_.get(), &marker);
+#endif
       mem_out_events_.push_back(std::move(marker));
       if (err != CL_SUCCESS) {
         CAF_LOGMF(CAF_ERROR, "clSetEventCallback: " << get_opencl_error(err));
@@ -120,7 +125,8 @@ public:
 
   template <long I, long... Is>
   void enqueue_read_buffers(cl_event& kernel_done, detail::int_list<I, Is...>) {
-    using value_type = typename std::tuple_element<I, std::tuple<std::vector<Ts>...>>::type;
+    using value_type =
+      typename std::tuple_element<I, std::tuple<std::vector<Ts>...>>::type;
     cl_event event;
     auto size = sizeof(value_type) * result_sizes_[I];
     std::get<I>(result_buffers_).resize(size);
@@ -150,7 +156,9 @@ private:
 
   void handle_results() {
     auto& map_fun = actor_facade_->map_results_;
-    auto msg = map_fun ? apply_args(map_fun, detail::get_indices(result_buffers_), result_buffers_)
+    auto msg = map_fun ? apply_args(map_fun,
+                                    detail::get_indices(result_buffers_),
+                                    result_buffers_)
                        : make_message(std::move(result_buffers_));
     handle_.deliver(std::move(msg));
   }

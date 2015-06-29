@@ -236,7 +236,7 @@ void test_opencl() {
   opencl::spawn_config cfg4{{matrix_size, matrix_size}};
   auto w4 = spawn_cl(kernel_source, kernel_name, cfg4,
                      map_arg, map_res,
-                     opencl::in<ivec>{}, opencl::out<ivec&>{});
+                     opencl::in<ivec>{}, opencl::out<ivec>{});
   self->send(w4, make_iota_matrix<matrix_size>());
   self->receive (
     [&](const matrix_type& result) {
