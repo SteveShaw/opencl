@@ -79,22 +79,20 @@ void multiplier(event_based_actor* self) {
   cout << endl;
 
   // spawn an opencl actor
-  // template parameter: signature of opencl kernel using proper return type
-  //           instead of output parameter (implicitly
-  //           mapped to the last kernel argument)
   // 1st arg: source code of one or more kernels
   // 2nd arg: name of the kernel to use
-  // 3rd arg: global dimension arguments for opencl's enqueue;
-  //      creates matrix_size * matrix_size global work items
-  // 4th arg: offsets for global dimensions (optional)
-  // 5th arg: local dimensions (optional)
-  // 6th arg: number of elements in the result buffer
-  auto worker = spawn_cl<float*(float*,float*)>(kernel_source,
-                          kernel_name,
-                          {matrix_size, matrix_size},
-                          {},
-                          {},
-                          matrix_size * matrix_size);
+  // 3rd arg: a spawn configuration that includes:
+  //          - the global dimension arguments for opencl's enqueue
+  //            creates matrix_size * matrix_size global work items
+  //          - offsets for global dimensions (optional)
+  //          - local dimensions (optional)
+  // 4th to Nth arg: the kernel signature described by in/out/in_out classes
+  //          that contain the argument type in their template, requires vectors
+  auto worker = spawn_cl(kernel_source, kernel_name,
+                         opencl::spawn_config{{matrix_size, matrix_size}},
+                         opencl::in<vector<float>>{},
+                         opencl::in<vector<float>>{},
+                         opencl::out<vector<float>>{});
   // send both matrices to the actor and wait for a result
   self->sync_send(worker, move(m1), move(m2)).then(
     [](const vector<float>& result) {

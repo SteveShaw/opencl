@@ -220,7 +220,7 @@ void test_opencl() {
       }
     );
   };
-  auto map_res = [](ivec& result) -> message {
+  auto map_res = [](ivec result) -> message {
     return make_message(matrix_type{std::move(result)});
   };
   opencl::spawn_config cfg3{{matrix_size, matrix_size}};

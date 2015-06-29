@@ -67,6 +67,7 @@ struct command_sig_from_outputs<T, detail::type_list<Ts...>> {
 template <class... Ts>
 class actor_facade : public abstract_actor {
 public:
+//  using arg_types = detail::type_list<typename carr_to_vec<Ts>::type...>;
   using arg_types = detail::type_list<Ts...>;
 
   using input_wrapped_types =
