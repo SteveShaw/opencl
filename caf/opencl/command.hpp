@@ -128,14 +128,15 @@ public:
 
   template <long I, long... Is>
   void enqueue_read_buffers(cl_event& kernel_done, detail::int_list<I, Is...>) {
-    using value_type =
-      typename std::tuple_element<I, std::tuple<std::vector<Ts>...>>::type;
+    using container_type =
+      typename std::tuple_element<I, std::tuple<Ts...>>::type;
+    using value_type = typename container_type::value_type;
     cl_event event;
-    auto size = sizeof(value_type) * result_sizes_[I];
-    std::cout << "Reading back: " << size << " bytes." << std::endl;
+    auto size = result_sizes_[I];
+    auto buffer_size = sizeof(value_type) * result_sizes_[I];
     std::get<I>(result_buffers_).resize(size);
     auto err = clEnqueueReadBuffer(queue_.get(), arguments_[I].get(),
-                                   CL_FALSE, 0, size,
+                                   CL_FALSE, 0, buffer_size,
                                    std::get<I>(result_buffers_).data(),
                                    1, &kernel_done, &event);
     if (err != CL_SUCCESS) {
@@ -159,14 +160,12 @@ private:
   message msg_; // required to keep the argument buffers alive (async copy)
 
   void handle_results() {
-    std::cout << "Triggered callback results are back." << std::endl;
     auto& map_fun = actor_facade_->map_results_;
     auto msg = map_fun ? apply_args(map_fun,
                                     detail::get_indices(result_buffers_),
                                     result_buffers_)
                        : message_from_results{}(result_buffers_);
     handle_.deliver(std::move(msg));
-    std::cout << "Sent results to sender." << std::endl;
   }
 };
 

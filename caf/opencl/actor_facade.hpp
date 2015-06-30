@@ -193,10 +193,10 @@ public:
   template <long I, class T>
   void create_buffer(const in<T>&, evnt_vec& events, size_vec&,
                      args_vec& arguments, message& msg) {
-    using value_type = typename detail::tl_at<unpacked_types, I>::type;
-    auto value = msg.get_as<value_type>(I);
-    size_t buffer_size = sizeof(T) * value.size();
-    std::cout << "Argument in with size " << buffer_size << "." << std::endl;
+    using container_type = typename detail::tl_at<unpacked_types, I>::type;
+    using value_type = typename container_type::value_type;
+    auto value = msg.get_as<container_type>(I);
+    size_t buffer_size = sizeof(value_type) * value.size();
     auto buffer = v2get(CAF_CLF(clCreateBuffer), context_.get(),
                         cl_mem_flags{CL_MEM_READ_ONLY}, buffer_size, nullptr);
     cl_event event = v1get<cl_event>(CAF_CLF(clEnqueueWriteBuffer),
@@ -211,10 +211,11 @@ public:
   template <long I, class T>
   void create_buffer(const in_out<T>&, evnt_vec& events, size_vec& sizes,
                      args_vec& arguments, message& msg) {
-    using value_type = typename detail::tl_at<unpacked_types, I>::type;
-    auto value = msg.get_as<value_type>(I);
-    size_t buffer_size = sizeof(T) * value.size();
-    std::cout << "Argument in_out with size " << buffer_size << "." << std::endl;
+    using container_type = typename detail::tl_at<unpacked_types, I>::type;
+    using value_type = typename container_type::value_type;
+    auto value = msg.get_as<container_type>(I);
+    auto size = value.size();
+    size_t buffer_size = sizeof(value_type) * size;
     auto buffer = v2get(CAF_CLF(clCreateBuffer), context_.get(),
                         cl_mem_flags{CL_MEM_READ_WRITE}, buffer_size, nullptr);
     cl_event event = v1get<cl_event>(CAF_CLF(clEnqueueWriteBuffer),
@@ -224,21 +225,22 @@ public:
     mem_ptr tmp;
     tmp.reset(buffer, false);
     arguments.push_back(tmp);
-    sizes.push_back(buffer_size);
+    sizes.push_back(size);
   }
   
   template <long I, class T>
   void create_buffer(const out<T>& wrapper, evnt_vec&, size_vec& sizes,
                      args_vec& arguments, message& msg) {
-    auto buffer_size = get_size_for_argument(wrapper, msg,
-                                             default_output_size_);
-    std::cout << "Argument out with size " << buffer_size << "." << std::endl;
+    using container_type = typename detail::tl_at<unpacked_types, I>::type;
+    using value_type = typename container_type::value_type;
+    auto size = get_size_for_argument(wrapper, msg, default_output_size_);
+    auto buffer_size = sizeof(value_type) * size;
     auto buffer = v2get(CAF_CLF(clCreateBuffer), context_.get(),
                         cl_mem_flags{CL_MEM_READ_ONLY}, buffer_size, nullptr);
     mem_ptr tmp;
     tmp.reset(buffer, false);
     arguments.push_back(tmp);
-    sizes.push_back(buffer_size);
+    sizes.push_back(size);
   }
 
   template <class Fun>
