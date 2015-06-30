@@ -141,12 +141,15 @@ public:
     }
     response_promise handle{this->address(), sender, mid.response_id()};
     evnt_vec events;
-    args_vec arguments;
+    args_vec input_buffers;
+    args_vec output_buffers;
     size_vec result_sizes;
-    add_kernel_arguments(events, arguments, result_sizes, content, indices);
+    add_kernel_arguments(events, input_buffers, output_buffers,
+                         result_sizes, content, indices);
     auto cmd = make_counted<command_type>(handle, this,
                                           std::move(events),
-                                          std::move(arguments),
+                                          std::move(input_buffers),
+                                          std::move(output_buffers),
                                           std::move(result_sizes),
                                           std::move(content));
     cmd->enqueue();
@@ -171,46 +174,47 @@ public:
                                            std::multiplies<size_t>{});
   }
 
-  void add_kernel_arguments(evnt_vec&, args_vec& arguments, size_vec&,
+  void add_kernel_arguments(evnt_vec&, args_vec&, args_vec&, size_vec&,
                             message&, detail::int_list<>) {
-    for (cl_uint i = 0; i < arguments.size(); ++i) {
-      v1callcl(CAF_CLF(clSetKernelArg), kernel_.get(), i,
-               sizeof(cl_mem), static_cast<void*>(&arguments[i]));
-    }
     clFlush(queue_.get());
   }
 
+  /// the separation into input and output is required, because we need to
+  /// access the output arguments later on, but only keep the ptrs to the input
+  /// to prevent them from being deleted before our operation finished
   template <long I, long... Is>
-  void add_kernel_arguments(evnt_vec& events, args_vec& arguments,
-                            size_vec& sizes, message& msg,
-                            detail::int_list<I, Is...>) {
+  void add_kernel_arguments(evnt_vec& events, args_vec& input_buffers,
+                            args_vec& output_buffers, size_vec& sizes,
+                            message& msg, detail::int_list<I, Is...>) {
     create_buffer<I>(std::get<I>(argument_types_), events, sizes,
-                  arguments, msg);
-    add_kernel_arguments(events, arguments, sizes, msg,
+                     input_buffers, output_buffers, msg);
+    add_kernel_arguments(events, input_buffers, output_buffers, sizes, msg,
                          detail::int_list<Is...>{});
   }
 
   template <long I, class T>
   void create_buffer(const in<T>&, evnt_vec& events, size_vec&,
-                     args_vec& arguments, message& msg) {
+                     args_vec& input_buffers, args_vec&, message& msg) {
     using container_type = typename detail::tl_at<unpacked_types, I>::type;
     using value_type = typename container_type::value_type;
     auto value = msg.get_as<container_type>(I);
     size_t buffer_size = sizeof(value_type) * value.size();
     auto buffer = v2get(CAF_CLF(clCreateBuffer), context_.get(),
-                        cl_mem_flags{CL_MEM_READ_ONLY}, buffer_size, nullptr);
+                        cl_mem_flags{CL_MEM_READ_WRITE}, buffer_size, nullptr);
     cl_event event = v1get<cl_event>(CAF_CLF(clEnqueueWriteBuffer),
                                      queue_.get(), buffer, cl_bool{CL_FALSE},
                                      cl_uint{0}, buffer_size, value.data());
     events.push_back(std::move(event));
     mem_ptr tmp;
     tmp.reset(buffer, false);
-    arguments.push_back(tmp);
+    input_buffers.push_back(tmp);
+    v1callcl(CAF_CLF(clSetKernelArg), kernel_.get(), I,
+             sizeof(cl_mem), static_cast<void*>(&input_buffers.back()));
   }
 
   template <long I, class T>
   void create_buffer(const in_out<T>&, evnt_vec& events, size_vec& sizes,
-                     args_vec& arguments, message& msg) {
+                     args_vec&, args_vec& output_buffers, message& msg) {
     using container_type = typename detail::tl_at<unpacked_types, I>::type;
     using value_type = typename container_type::value_type;
     auto value = msg.get_as<container_type>(I);
@@ -224,22 +228,26 @@ public:
     events.push_back(std::move(event));
     mem_ptr tmp;
     tmp.reset(buffer, false);
-    arguments.push_back(tmp);
+    output_buffers.push_back(tmp);
+    v1callcl(CAF_CLF(clSetKernelArg), kernel_.get(), I,
+             sizeof(cl_mem), static_cast<void*>(&output_buffers.back()));
     sizes.push_back(size);
   }
   
   template <long I, class T>
   void create_buffer(const out<T>& wrapper, evnt_vec&, size_vec& sizes,
-                     args_vec& arguments, message& msg) {
+                     args_vec&, args_vec& output_buffers, message& msg) {
     using container_type = typename detail::tl_at<unpacked_types, I>::type;
     using value_type = typename container_type::value_type;
     auto size = get_size_for_argument(wrapper, msg, default_output_size_);
     auto buffer_size = sizeof(value_type) * size;
     auto buffer = v2get(CAF_CLF(clCreateBuffer), context_.get(),
-                        cl_mem_flags{CL_MEM_READ_ONLY}, buffer_size, nullptr);
+                        cl_mem_flags{CL_MEM_READ_WRITE}, buffer_size, nullptr);
     mem_ptr tmp;
     tmp.reset(buffer, false);
-    arguments.push_back(tmp);
+    output_buffers.push_back(tmp);
+    v1callcl(CAF_CLF(clSetKernelArg), kernel_.get(), I,
+             sizeof(cl_mem), static_cast<void*>(&output_buffers.back()));
     sizes.push_back(size);
   }
 

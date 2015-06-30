@@ -193,13 +193,18 @@ void test_opencl() {
                        152, 174, 196, 218,
                        248, 286, 324, 362,
                        344, 398, 452, 506};
-
+  CAF_TEST_INFO("Checkpoint 1");
   auto w1 = spawn_cl(program::create(kernel_source), kernel_name,
                      opencl::spawn_config{{matrix_size, matrix_size}},
                      opencl::in<ivec>{}, opencl::out<ivec>{});
   self->send(w1, make_iota_vector<int>(matrix_size * matrix_size));
   self->receive (
     [&](const ivec& result) {
+      std::cout << "result: " << std::endl;
+      for (size_t i = 0; i < result.size(); ++i) {
+        std::cout << result[i] << " ";
+        if (i % 4 == 3) std::cout << std::endl;
+      }
       CAF_CHECK(result == expected1);
     },
     others >> [&] {
@@ -208,6 +213,7 @@ void test_opencl() {
     }
   );
   opencl::spawn_config cfg2{{matrix_size, matrix_size}};
+  CAF_TEST_INFO("Checkpoint 2");
   auto w2 = spawn_cl(kernel_source, kernel_name, cfg2,
                      opencl::in<ivec>{}, opencl::out<ivec>{});
   self->send(w2, make_iota_vector<int>(matrix_size * matrix_size));
@@ -232,6 +238,7 @@ void test_opencl() {
     return make_message(matrix_type{std::move(result)});
   };
   opencl::spawn_config cfg3{{matrix_size, matrix_size}};
+  CAF_TEST_INFO("Checkpoint 3");
   auto w3 = spawn_cl(program::create(kernel_source), kernel_name, cfg3,
                      map_arg, map_res,
                      opencl::in<ivec>{}, opencl::out<ivec>{});
@@ -246,6 +253,7 @@ void test_opencl() {
     }
   );
   opencl::spawn_config cfg4{{matrix_size, matrix_size}};
+  CAF_TEST_INFO("Checkpoint 4");
   auto w4 = spawn_cl(kernel_source, kernel_name, cfg4,
                      map_arg, map_res,
                      opencl::in<ivec>{}, opencl::out<ivec>{});
@@ -269,6 +277,7 @@ void test_opencl() {
   // test for opencl compiler flags
   auto prog5 = program::create(kernel_source_compiler_flag, compiler_flag);
   opencl::spawn_config cfg5{{array_size}};
+  CAF_TEST_INFO("Checkpoint 5");
   auto w5 = spawn_cl(prog5, kernel_name_compiler_flag, cfg5,
                      opencl::in<ivec>{}, opencl::out<ivec>{});
   self->send(w5, make_iota_vector<int>(array_size));
@@ -293,6 +302,7 @@ void test_opencl() {
   ivec arr6(static_cast<size_t>(reduce_buffer_size));
   int n = static_cast<int>(arr6.capacity());
   std::generate(arr6.begin(), arr6.end(), [&]{ return --n; });
+  CAF_TEST_INFO("Checkpoint 6");
   opencl::spawn_config cfg6{{static_cast<size_t>(reduce_global_size)},
                             {},
                             {static_cast<size_t>(reduce_local_size)}};
@@ -321,8 +331,9 @@ void test_opencl() {
   };
   // constant memory arguments
   const ivec arr7{problem_size};
+  CAF_TEST_INFO("Checkpoint 7");
   auto w7 = spawn_cl(kernel_source_const, kernel_name_const,
-                     opencl::spawn_config{},
+                     opencl::spawn_config{{problem_size}},
                      opencl::in<ivec>{},
                      opencl::out<ivec>{get_out_size_7});
   self->send(w7, move(arr7));

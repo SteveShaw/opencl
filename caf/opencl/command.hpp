@@ -44,14 +44,16 @@ template <class FacadeType, class... Ts>
 class command : public ref_counted {
 public:
   command(response_promise handle, intrusive_ptr<FacadeType> actor_facade,
-          std::vector<cl_event> events, std::vector<mem_ptr> arguments,
-          std::vector<size_t> result_sizes, message msg)
+          std::vector<cl_event> events, std::vector<mem_ptr> input_buffers,
+          std::vector<mem_ptr> output_buffers, std::vector<size_t> result_sizes,
+          message msg)
       : result_sizes_(result_sizes),
         handle_(handle),
         actor_facade_(actor_facade),
         queue_(actor_facade->queue_),
         mem_in_events_(std::move(events)),
-        arguments_(std::move(arguments)),
+        input_buffers_(std::move(input_buffers)),
+        output_buffers_(std::move(output_buffers)),
         msg_(msg) {
     // nop
   }
@@ -82,13 +84,14 @@ public:
       data_or_nullptr(actor_facade_->config_.dimensions()),
       data_or_nullptr(actor_facade_->config_.local_dimensions()),
       static_cast<cl_uint>(mem_in_events_.size()),
-      (mem_in_events_.empty() ? nullptr : mem_in_events_.data()), &event_k);
+      (mem_in_events_.empty() ? nullptr : mem_in_events_.data()), &event_k
+    );
     if (err != CL_SUCCESS) {
       CAF_LOGMF(CAF_ERROR, "clEnqueueNDRangeKernel: " << get_opencl_error(err));
-      this->deref(); // or can anything actually happen?
+      clReleaseEvent(event_k);
+      this->deref();
       return;
     } else {
-      mem_out_events_.push_back(std::move(event_k));
       enqueue_read_buffers(event_k, detail::get_indices(result_buffers_));
       cl_event marker;
 #if defined (CL_VERSION_1_2)
@@ -97,9 +100,10 @@ public:
 #else
       err = clEnqueueMarker(queue_.get(), &marker);
 #endif
-      mem_out_events_.push_back(std::move(marker));
       if (err != CL_SUCCESS) {
         CAF_LOGMF(CAF_ERROR, "clSetEventCallback: " << get_opencl_error(err));
+        clReleaseEvent(marker);
+        clReleaseEvent(event_k);
         this->deref(); // callback is not set
         return;
       }
@@ -112,6 +116,8 @@ public:
                                this);
       if (err != CL_SUCCESS) {
         CAF_LOGMF(CAF_ERROR, "clSetEventCallback: " << get_opencl_error(err));
+        clReleaseEvent(marker);
+        clReleaseEvent(event_k);
         this->deref(); // callback is not set
         return;
       }
@@ -119,6 +125,8 @@ public:
       if (err != CL_SUCCESS) {
         CAF_LOGMF(CAF_ERROR, "clFlush: " << get_opencl_error(err));
       }
+      mem_out_events_.push_back(std::move(event_k));
+      mem_out_events_.push_back(std::move(marker));
     }
   }
 
@@ -135,7 +143,7 @@ public:
     auto size = result_sizes_[I];
     auto buffer_size = sizeof(value_type) * result_sizes_[I];
     std::get<I>(result_buffers_).resize(size);
-    auto err = clEnqueueReadBuffer(queue_.get(), arguments_[I].get(),
+    auto err = clEnqueueReadBuffer(queue_.get(), output_buffers_[I].get(),
                                    CL_FALSE, 0, buffer_size,
                                    std::get<I>(result_buffers_).data(),
                                    1, &kernel_done, &event);
@@ -155,7 +163,8 @@ private:
   command_queue_ptr queue_;
   std::vector<cl_event> mem_in_events_;
   std::vector<cl_event> mem_out_events_;
-  std::vector<mem_ptr> arguments_;
+  std::vector<mem_ptr> input_buffers_;
+  std::vector<mem_ptr> output_buffers_;
   std::tuple<Ts...> result_buffers_;
   message msg_; // required to keep the argument buffers alive (async copy)
 

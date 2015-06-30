@@ -36,7 +36,7 @@ public:
     // nop
   }
 
-  spawn_config(opencl::dim_vec&& dims = {},
+  spawn_config(opencl::dim_vec&& dims,
                opencl::dim_vec&& offset = {},
                opencl::dim_vec&& local_dims = {})
     : dims_{std::move(dims)},
