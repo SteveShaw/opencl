@@ -69,6 +69,7 @@ class actor_facade : public abstract_actor {
 public:
 //  using arg_types = detail::type_list<typename carr_to_vec<Ts>::type...>;
   using arg_types = detail::type_list<Ts...>;
+  using unpacked_types = typename detail::tl_map<arg_types, extract_type>::type;
 
   using input_wrapped_types =
     typename detail::tl_filter<arg_types, is_input_arg>::type;
@@ -81,6 +82,9 @@ public:
   using output_types =
     typename detail::tl_map<output_wrapped_types, extract_type>::type;
   using output_mapping = typename function_sig_from_outputs<output_types>::type;
+
+//  using indices = typename detail::il_indices<arg_types>::type;
+  typename detail::il_indices<arg_types>::type indices;
 
   using evnt_vec = std::vector<cl_event>;
   using args_vec = std::vector<mem_ptr>;
@@ -132,7 +136,6 @@ public:
       }
       content = std::move(*mapped);
     }
-    typename detail::il_indices<input_types>::type indices;
     if (! content.match_elements(input_types{})) {
       return;
     }
@@ -144,12 +147,11 @@ public:
     auto cmd = make_counted<command_type>(handle, this,
                                           std::move(events),
                                           std::move(arguments),
-                                          result_sizes,
+                                          std::move(result_sizes),
                                           std::move(content));
     cmd->enqueue();
   }
 
-//private:
   actor_facade(const program& prog, kernel_ptr kernel,
                const spawn_config& config,
                input_mapping map_args, output_mapping map_result,
@@ -182,18 +184,19 @@ public:
   void add_kernel_arguments(evnt_vec& events, args_vec& arguments,
                             size_vec& sizes, message& msg,
                             detail::int_list<I, Is...>) {
-    using value_type = typename detail::tl_at<input_types, I>::type;
-    auto value = msg.get_as<value_type>(I);
-    create_buffer(std::get<I>(argument_types_), value, events, sizes,
+    create_buffer<I>(std::get<I>(argument_types_), events, sizes,
                   arguments, msg);
     add_kernel_arguments(events, arguments, sizes, msg,
                          detail::int_list<Is...>{});
   }
 
-  template <class T>
-  void create_buffer(const in<T>&, T value, evnt_vec& events, size_vec&,
-                     args_vec& arguments, message&) {
+  template <long I, class T>
+  void create_buffer(const in<T>&, evnt_vec& events, size_vec&,
+                     args_vec& arguments, message& msg) {
+    using value_type = typename detail::tl_at<unpacked_types, I>::type;
+    auto value = msg.get_as<value_type>(I);
     size_t buffer_size = sizeof(T) * value.size();
+    std::cout << "Argument in with size " << buffer_size << "." << std::endl;
     auto buffer = v2get(CAF_CLF(clCreateBuffer), context_.get(),
                         cl_mem_flags{CL_MEM_READ_ONLY}, buffer_size, nullptr);
     cl_event event = v1get<cl_event>(CAF_CLF(clEnqueueWriteBuffer),
@@ -205,10 +208,13 @@ public:
     arguments.push_back(tmp);
   }
 
-  template <class T>
-  void create_buffer(const in_out<T>&, T value, evnt_vec& events, size_vec&,
-                     args_vec& arguments, message&) {
+  template <long I, class T>
+  void create_buffer(const in_out<T>&, evnt_vec& events, size_vec& sizes,
+                     args_vec& arguments, message& msg) {
+    using value_type = typename detail::tl_at<unpacked_types, I>::type;
+    auto value = msg.get_as<value_type>(I);
     size_t buffer_size = sizeof(T) * value.size();
+    std::cout << "Argument in_out with size " << buffer_size << "." << std::endl;
     auto buffer = v2get(CAF_CLF(clCreateBuffer), context_.get(),
                         cl_mem_flags{CL_MEM_READ_WRITE}, buffer_size, nullptr);
     cl_event event = v1get<cl_event>(CAF_CLF(clEnqueueWriteBuffer),
@@ -218,33 +224,27 @@ public:
     mem_ptr tmp;
     tmp.reset(buffer, false);
     arguments.push_back(tmp);
+    sizes.push_back(buffer_size);
   }
   
-  template <class T>
-  void create_buffer(const out<T>& wrapper, T value, evnt_vec& events,
-                     size_vec& sizes, args_vec& arguments, message& msg) {
-    auto buffer_size = get_size_for_argument(wrapper.size_calculator_, msg,
+  template <long I, class T>
+  void create_buffer(const out<T>& wrapper, evnt_vec&, size_vec& sizes,
+                     args_vec& arguments, message& msg) {
+    auto buffer_size = get_size_for_argument(wrapper, msg,
                                              default_output_size_);
+    std::cout << "Argument out with size " << buffer_size << "." << std::endl;
     auto buffer = v2get(CAF_CLF(clCreateBuffer), context_.get(),
                         cl_mem_flags{CL_MEM_READ_ONLY}, buffer_size, nullptr);
-    cl_event event = v1get<cl_event>(CAF_CLF(clEnqueueWriteBuffer),
-                                     queue_.get(), buffer, cl_bool{CL_FALSE},
-                                     cl_uint{0}, buffer_size, value.data());
-    events.push_back(std::move(event));
     mem_ptr tmp;
     tmp.reset(buffer, false);
     arguments.push_back(tmp);
     sizes.push_back(buffer_size);
   }
 
-  size_t get_size_for_argument(dummy_size_calculator, const message&,
-                               size_t default_size) {
-    return default_size;
-  }
-
   template <class Fun>
-  size_t get_size_for_argument(Fun f, const message& m, size_t) {
-    return m.apply(f);
+  size_t get_size_for_argument(Fun& f, message& m, size_t default_size) {
+    auto size = f(m);
+    return  size ? default_size : *size;
   }
 
   kernel_ptr kernel_;

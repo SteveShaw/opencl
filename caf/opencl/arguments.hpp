@@ -66,7 +66,7 @@ struct out {
       return none;
     };
   }
-  optional<size_t> operator()(const message& msg) {
+  optional<size_t> operator()(message& msg) const {
     return fun_ ? fun_(msg) : 0;
   }
   std::function<optional<size_t> (message&)> fun_;
@@ -83,6 +83,20 @@ template <class T>
 struct carr_to_vec<T*> {
   using type = std::vector<T>;
 };
+
+/// Filter types for any argument type.
+template <class T>
+struct is_opencl_arg : std::false_type {};
+
+template <class T>
+struct is_opencl_arg<in<T>> : std::true_type {};
+
+template <class T>
+struct is_opencl_arg<in_out<T>> : std::true_type {};
+
+template <class T>
+struct is_opencl_arg<out<T>> : std::true_type {};
+
 
 /// Filter type lists for input arguments, in and in_out.
 template <class T>
@@ -128,6 +142,18 @@ struct extract_type<in_out<T>> {
 template <class T>
 struct extract_type<out<T>> {
   using type = typename std::decay<typename carr_to_vec<T>::type>::type;
+};
+
+/// Create the return message from tuple arumgent
+struct message_from_results {
+  template <class T, class... Ts>
+  message operator()(T& x, Ts&... xs) {
+    return make_message(std::move(x), std::move(xs)...);
+  }
+  template <class... Ts>
+  message operator()(std::tuple<Ts...>& values) {
+    return apply_args(*this, detail::get_indices(values), values);
+  }
 };
 
 } // namespace opencl

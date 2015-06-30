@@ -69,7 +69,7 @@ struct cl_spawn_helper {
 ///                            `dims.empty()`, or `clCreateKernel` failed.
 template <class T, class... Ts>
 typename std::enable_if<
-  opencl::is_output_arg<T>::value || opencl::is_input_arg<T>::value,
+  opencl::is_opencl_arg<T>::value,
   actor
 >::type
 spawn_cl(const opencl::program& prog,
@@ -88,7 +88,7 @@ spawn_cl(const opencl::program& prog,
 ///                            occured, or @p clCreateKernel failed.
 template <class T, class... Ts>
 typename std::enable_if<
-  opencl::is_output_arg<T>::value || opencl::is_input_arg<T>::value,
+  opencl::is_opencl_arg<T>::value,
   actor
 >::type
 spawn_cl(const char* source,

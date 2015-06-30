@@ -201,6 +201,10 @@ void test_opencl() {
   self->receive (
     [&](const ivec& result) {
       CAF_CHECK(result == expected1);
+    },
+    others >> [&] {
+      CAF_TEST_ERROR("Unexpected message "
+                     << to_string(self->current_message()));
     }
   );
   opencl::spawn_config cfg2{{matrix_size, matrix_size}};
@@ -210,6 +214,10 @@ void test_opencl() {
   self->receive (
     [&](const ivec& result) {
       CAF_CHECK(result == expected1);
+    },
+    others >> [&] {
+      CAF_TEST_ERROR("Unexpected message "
+                     << to_string(self->current_message()));
     }
   );
   const matrix_type expected2(std::move(expected1));
@@ -220,7 +228,10 @@ void test_opencl() {
       }
     );
   };
-  auto map_res = [](ivec result) -> message {
+  auto map_res = [=](ivec result) -> message {
+    std::cout << "Called mapping function with vector<int> and size "
+              << result.size() << " (Should be: " << expected2.data().size()
+              << ")." << std::endl;
     return make_message(matrix_type{std::move(result)});
   };
   opencl::spawn_config cfg3{{matrix_size, matrix_size}};
@@ -231,6 +242,10 @@ void test_opencl() {
   self->receive (
     [&](const matrix_type& result) {
       CAF_CHECK(expected2 == result);
+    },
+    others >> [&] {
+      CAF_TEST_ERROR("Unexpected message "
+                     << to_string(self->current_message()));
     }
   );
   opencl::spawn_config cfg4{{matrix_size, matrix_size}};
@@ -241,6 +256,10 @@ void test_opencl() {
   self->receive (
     [&](const matrix_type& result) {
       CAF_CHECK(expected2 == result);
+    },
+    others >> [&] {
+      CAF_TEST_ERROR("Unexpected message "
+                     << to_string(self->current_message()));
     }
   );
   try {
@@ -260,6 +279,10 @@ void test_opencl() {
   self->receive (
     [&](const ivec& result) {
       CAF_CHECK(result == expected3);
+    },
+    others >> [&] {
+      CAF_TEST_ERROR("Unexpected message "
+                     << to_string(self->current_message()));
     }
   );
 
@@ -289,6 +312,10 @@ void test_opencl() {
   self->receive(
     [&](const ivec& result) {
       CAF_CHECK(result == expected4);
+    },
+    others >> [&] {
+      CAF_TEST_ERROR("Unexpected message "
+                     << to_string(self->current_message()));
     }
   );
   // calculator function for getting the size of the output
@@ -307,6 +334,10 @@ void test_opencl() {
   self->receive(
     [&](const ivec& result) {
       CAF_CHECK(result == expected5);
+    },
+    others >> [&] {
+      CAF_TEST_ERROR("Unexpected message "
+                     << to_string(self->current_message()));
     }
   );
 }

@@ -26,13 +26,16 @@
 #include <algorithm>
 #include <functional>
 
-#include "caf/detail/logging.hpp"
-#include "caf/opencl/global.hpp"
 #include "caf/abstract_actor.hpp"
 #include "caf/response_promise.hpp"
+
+#include "caf/detail/logging.hpp"
+#include "caf/detail/scope_guard.hpp"
+
+#include "caf/opencl/global.hpp"
+#include "caf/opencl/arguments.hpp"
 #include "caf/opencl/smart_ptr.hpp"
 #include "caf/opencl/opencl_err.hpp"
-#include "caf/detail/scope_guard.hpp"
 
 namespace caf {
 namespace opencl {
@@ -120,7 +123,7 @@ public:
   }
 
   void enqueue_read_buffers(cl_event&, detail::int_list<>) {
-    // nop
+    // nop, end of recursion
   }
 
   template <long I, long... Is>
@@ -129,8 +132,9 @@ public:
       typename std::tuple_element<I, std::tuple<std::vector<Ts>...>>::type;
     cl_event event;
     auto size = sizeof(value_type) * result_sizes_[I];
+    std::cout << "Reading back: " << size << " bytes." << std::endl;
     std::get<I>(result_buffers_).resize(size);
-    auto err = clEnqueueReadBuffer(queue_.get(), arguments_.back().get(),
+    auto err = clEnqueueReadBuffer(queue_.get(), arguments_[I].get(),
                                    CL_FALSE, 0, size,
                                    std::get<I>(result_buffers_).data(),
                                    1, &kernel_done, &event);
@@ -155,12 +159,14 @@ private:
   message msg_; // required to keep the argument buffers alive (async copy)
 
   void handle_results() {
+    std::cout << "Triggered callback results are back." << std::endl;
     auto& map_fun = actor_facade_->map_results_;
     auto msg = map_fun ? apply_args(map_fun,
                                     detail::get_indices(result_buffers_),
                                     result_buffers_)
-                       : make_message(std::move(result_buffers_));
+                       : message_from_results{}(result_buffers_);
     handle_.deliver(std::move(msg));
+    std::cout << "Sent results to sender." << std::endl;
   }
 };
 
