@@ -45,7 +45,7 @@ constexpr const char* kernel_source = R"__(
 
 constexpr const char* kernel_source_error = R"__(
   __kernel void missing(__global int*) {
-    size_t semicolon
+    size_t semicolon_missing
   }
 )__";
 
@@ -187,25 +187,39 @@ size_t get_max_workgroup_size(size_t device_id, size_t dimension) {
   return max_size < dimsize ? max_size : dimsize;
 }
 
+template <class T>
+void check_vector_results(const std::string& desc,
+                          const std::vector<T>& expected,
+                          const std::vector<T>& result) {
+  auto cond = (expected == result);
+  CAF_CHECK(cond);
+  if (!cond) {
+    CAF_TEST_INFO(desc << " test failed.");
+    std::cout << "Expected: " << std::endl;
+    for (size_t i = 0; i < expected.size(); ++i) {
+      std::cout << " " << expected[i];
+    }
+    std::cout << std::endl << "Received: " << std::endl;
+    for (size_t i = 0; i < result.size(); ++i) {
+      std::cout << " " << result[i];
+    }
+    std::cout << std::endl;
+  }
+}
+
 void test_opencl() {
   scoped_actor self;
   const ivec expected1{ 56,  62,  68,  74,
                        152, 174, 196, 218,
                        248, 286, 324, 362,
                        344, 398, 452, 506};
-  CAF_TEST_INFO("Checkpoint 1");
   auto w1 = spawn_cl(program::create(kernel_source), kernel_name,
                      opencl::spawn_config{{matrix_size, matrix_size}},
                      opencl::in<ivec>{}, opencl::out<ivec>{});
   self->send(w1, make_iota_vector<int>(matrix_size * matrix_size));
   self->receive (
     [&](const ivec& result) {
-      std::cout << "result: " << std::endl;
-      for (size_t i = 0; i < result.size(); ++i) {
-        std::cout << result[i] << " ";
-        if (i % 4 == 3) std::cout << std::endl;
-      }
-      CAF_CHECK(result == expected1);
+      check_vector_results("Frist", expected1, result);
     },
     others >> [&] {
       CAF_TEST_ERROR("Unexpected message "
@@ -213,13 +227,12 @@ void test_opencl() {
     }
   );
   opencl::spawn_config cfg2{{matrix_size, matrix_size}};
-  CAF_TEST_INFO("Checkpoint 2");
   auto w2 = spawn_cl(kernel_source, kernel_name, cfg2,
                      opencl::in<ivec>{}, opencl::out<ivec>{});
   self->send(w2, make_iota_vector<int>(matrix_size * matrix_size));
   self->receive (
     [&](const ivec& result) {
-      CAF_CHECK(result == expected1);
+      check_vector_results("Second", expected1, result);
     },
     others >> [&] {
       CAF_TEST_ERROR("Unexpected message "
@@ -238,14 +251,13 @@ void test_opencl() {
     return make_message(matrix_type{std::move(result)});
   };
   opencl::spawn_config cfg3{{matrix_size, matrix_size}};
-  CAF_TEST_INFO("Checkpoint 3");
   auto w3 = spawn_cl(program::create(kernel_source), kernel_name, cfg3,
                      map_arg, map_res,
                      opencl::in<ivec>{}, opencl::out<ivec>{});
   self->send(w3, make_iota_matrix<matrix_size>());
   self->receive (
     [&](const matrix_type& result) {
-      CAF_CHECK(expected2 == result);
+      check_vector_results("Third", expected2.data(), result.data());
     },
     others >> [&] {
       CAF_TEST_ERROR("Unexpected message "
@@ -253,38 +265,42 @@ void test_opencl() {
     }
   );
   opencl::spawn_config cfg4{{matrix_size, matrix_size}};
-  CAF_TEST_INFO("Checkpoint 4");
   auto w4 = spawn_cl(kernel_source, kernel_name, cfg4,
                      map_arg, map_res,
                      opencl::in<ivec>{}, opencl::out<ivec>{});
   self->send(w4, make_iota_matrix<matrix_size>());
   self->receive (
     [&](const matrix_type& result) {
-      CAF_CHECK(expected2 == result);
+      check_vector_results("Fouth", expected2.data(), result.data());
     },
     others >> [&] {
       CAF_TEST_ERROR("Unexpected message "
                      << to_string(self->current_message()));
     }
   );
+  CAF_TEST_INFO("Expecting exception (compiling invalid kernel, "
+                "semicolon is missing).");
   try {
     auto create_error = program::create(kernel_source_error);
   }
   catch (const std::exception& exc) {
-    CAF_MESSAGE(exc.what());
-    CAF_CHECK(strcmp("clBuildProgram: CL_BUILD_PROGRAM_FAILURE", exc.what()) == 0);
+    auto cond = (strcmp("clBuildProgram: CL_BUILD_PROGRAM_FAILURE",
+                        exc.what()) == 0);
+      CAF_CHECK(cond);
+      if (!cond) {
+        CAF_TEST_INFO("Fifth test failed.");
+      }
   }
   // test for opencl compiler flags
   auto prog5 = program::create(kernel_source_compiler_flag, compiler_flag);
   opencl::spawn_config cfg5{{array_size}};
-  CAF_TEST_INFO("Checkpoint 5");
   auto w5 = spawn_cl(prog5, kernel_name_compiler_flag, cfg5,
                      opencl::in<ivec>{}, opencl::out<ivec>{});
   self->send(w5, make_iota_vector<int>(array_size));
   auto expected3 = make_iota_vector<int>(array_size);
   self->receive (
     [&](const ivec& result) {
-      CAF_CHECK(result == expected3);
+      check_vector_results("Sixth", expected3, result);
     },
     others >> [&] {
       CAF_TEST_ERROR("Unexpected message "
@@ -294,23 +310,22 @@ void test_opencl() {
 
   // test for manuel return size selection (max workgroup size 1d)
   const int max_workgroup_size = static_cast<int>(get_max_workgroup_size(0,1));
-  const int reduce_buffer_size = max_workgroup_size * 8;
-  const int reduce_local_size  = max_workgroup_size;
-  const int reduce_work_groups = reduce_buffer_size / reduce_local_size;
-  const int reduce_global_size = reduce_buffer_size;
-  const int reduce_result_size = reduce_work_groups;
-  ivec arr6(static_cast<size_t>(reduce_buffer_size));
+  const size_t reduce_buffer_size = static_cast<size_t>(max_workgroup_size) * 8;
+  const size_t reduce_local_size  = static_cast<size_t>(max_workgroup_size);
+  const size_t reduce_work_groups = reduce_buffer_size / reduce_local_size;
+  const size_t reduce_global_size = reduce_buffer_size;
+  const size_t reduce_result_size = reduce_work_groups;
+  ivec arr6(reduce_buffer_size);
   int n = static_cast<int>(arr6.capacity());
   std::generate(arr6.begin(), arr6.end(), [&]{ return --n; });
-  CAF_TEST_INFO("Checkpoint 6");
-  opencl::spawn_config cfg6{{static_cast<size_t>(reduce_global_size)},
-                            {},
-                            {static_cast<size_t>(reduce_local_size)}};
+  opencl::spawn_config cfg6{{reduce_global_size},
+                            { /* no offsets */ },
+                            {reduce_local_size}};
   auto get_out_size_6 = [=](const ivec&) {
     return reduce_result_size;
   };
   auto w6 = spawn_cl(kernel_source_reduce, kernel_name_reduce, cfg6,
-                     opencl::in<ivec>{}, opencl::out<ivec>(get_out_size_6));
+                     opencl::in<ivec>{}, opencl::out<ivec>{get_out_size_6});
   self->send(w6, move(arr6));
   ivec expected4{max_workgroup_size * 7, max_workgroup_size * 6,
                  max_workgroup_size * 5, max_workgroup_size * 4,
@@ -318,7 +333,7 @@ void test_opencl() {
                  max_workgroup_size,     0};
   self->receive(
     [&](const ivec& result) {
-      CAF_CHECK(result == expected4);
+      check_vector_results("Seventh", expected4, result);
     },
     others >> [&] {
       CAF_TEST_ERROR("Unexpected message "
@@ -327,11 +342,10 @@ void test_opencl() {
   );
   // calculator function for getting the size of the output
   auto get_out_size_7 = [=](const ivec&) {
-    return problem_size;
+    return static_cast<size_t>(problem_size);
   };
   // constant memory arguments
   const ivec arr7{problem_size};
-  CAF_TEST_INFO("Checkpoint 7");
   auto w7 = spawn_cl(kernel_source_const, kernel_name_const,
                      opencl::spawn_config{{problem_size}},
                      opencl::in<ivec>{},
@@ -341,7 +355,7 @@ void test_opencl() {
   fill(begin(expected5), end(expected5), problem_size);
   self->receive(
     [&](const ivec& result) {
-      CAF_CHECK(result == expected5);
+      check_vector_results("Eigth", expected5, result);
     },
     others >> [&] {
       CAF_TEST_ERROR("Unexpected message "

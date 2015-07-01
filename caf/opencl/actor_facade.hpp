@@ -93,8 +93,6 @@ public:
   using command_type =
     typename command_sig_from_outputs<actor_facade, output_types>::type;
 
-  //friend class command_type; //command<actor_facade, output_types>;
-
   static intrusive_ptr<actor_facade> create(const program& prog,
                                             const char* kernel_name,
                                             const spawn_config& config,
@@ -201,8 +199,10 @@ public:
     size_t buffer_size = sizeof(value_type) * value.size();
     auto buffer = v2get(CAF_CLF(clCreateBuffer), context_.get(),
                         cl_mem_flags{CL_MEM_READ_WRITE}, buffer_size, nullptr);
+    // todo: this should use CL_FALSE, but leads to an error,
+    //       let's make it work with a blocking call first.
     cl_event event = v1get<cl_event>(CAF_CLF(clEnqueueWriteBuffer),
-                                     queue_.get(), buffer, cl_bool{CL_FALSE},
+                                     queue_.get(), buffer, cl_bool{CL_TRUE},
                                      cl_uint{0}, buffer_size, value.data());
     events.push_back(std::move(event));
     mem_ptr tmp;
@@ -254,7 +254,7 @@ public:
   template <class Fun>
   size_t get_size_for_argument(Fun& f, message& m, size_t default_size) {
     auto size = f(m);
-    return  size ? default_size : *size;
+    return  size && (*size > 0) ? *size : default_size;
   }
 
   kernel_ptr kernel_;
