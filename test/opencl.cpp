@@ -19,8 +19,7 @@ using ivec = std::vector<int>;
 
 constexpr size_t matrix_size = 4;
 constexpr size_t array_size = 32;
-
-constexpr int problem_size = 1024;
+constexpr size_t problem_size = 1024;
 
 constexpr const char* kernel_name = "matrix_square";
 constexpr const char* kernel_name_compiler_flag = "compiler_flag";
@@ -196,13 +195,13 @@ size_t get_max_workgroup_size(size_t device_id, size_t dimension) {
 }
 
 template <class T>
-void check_vector_results(const std::string& desc,
+void check_vector_results(const std::string& description,
                           const std::vector<T>& expected,
                           const std::vector<T>& result) {
   auto cond = (expected == result);
   CAF_CHECK(cond);
   if (!cond) {
-    CAF_TEST_INFO(desc << " test failed.");
+    CAF_TEST_INFO(description << " failed.");
     std::cout << "Expected: " << std::endl;
     for (size_t i = 0; i < expected.size(); ++i) {
       std::cout << " " << expected[i];
@@ -227,7 +226,9 @@ void test_opencl() {
   self->send(w1, make_iota_vector<int>(matrix_size * matrix_size));
   self->receive (
     [&](const ivec& result) {
-      check_vector_results("First", expected1, result);
+      check_vector_results("Simple matrix multiplication using vectors"
+                           "(kernel wrapped in program)",
+                           expected1, result);
     },
     others >> [&] {
       CAF_TEST_ERROR("Unexpected message "
@@ -240,7 +241,8 @@ void test_opencl() {
   self->send(w2, make_iota_vector<int>(matrix_size * matrix_size));
   self->receive (
     [&](const ivec& result) {
-      check_vector_results("Second", expected1, result);
+      check_vector_results("Simple matrix multiplication using vectors",
+                           expected1, result);
     },
     others >> [&] {
       CAF_TEST_ERROR("Unexpected message "
@@ -265,7 +267,9 @@ void test_opencl() {
   self->send(w3, make_iota_matrix<matrix_size>());
   self->receive (
     [&](const matrix_type& result) {
-      check_vector_results("Third", expected2.data(), result.data());
+      check_vector_results("Matrix multiplication with user defined type "
+                           "(kernel wrapped in program)",
+                           expected2.data(), result.data());
     },
     others >> [&] {
       CAF_TEST_ERROR("Unexpected message "
@@ -279,7 +283,8 @@ void test_opencl() {
   self->send(w4, make_iota_matrix<matrix_size>());
   self->receive (
     [&](const matrix_type& result) {
-      check_vector_results("Fouth", expected2.data(), result.data());
+      check_vector_results("Matrix multiplication with user defined type",
+                           expected2.data(), result.data());
     },
     others >> [&] {
       CAF_TEST_ERROR("Unexpected message "
@@ -296,7 +301,7 @@ void test_opencl() {
                         exc.what()) == 0);
       CAF_CHECK(cond);
       if (!cond) {
-        CAF_TEST_INFO("Fifth test failed.");
+        CAF_TEST_INFO("Wrong exception cought for program build failure.");
       }
   }
   // test for opencl compiler flags
@@ -308,7 +313,7 @@ void test_opencl() {
   auto expected3 = make_iota_vector<int>(array_size);
   self->receive (
     [&](const ivec& result) {
-      check_vector_results("Sixth", expected3, result);
+      check_vector_results("Passing compiler flags", expected3, result);
     },
     others >> [&] {
       CAF_TEST_ERROR("Unexpected message "
@@ -341,7 +346,7 @@ void test_opencl() {
                  max_workgroup_size,     0};
   self->receive(
     [&](const ivec& result) {
-      check_vector_results("Seventh", expected4, result);
+      check_vector_results("Passing size for the output", expected4, result);
     },
     others >> [&] {
       CAF_TEST_ERROR("Unexpected message "
@@ -350,7 +355,7 @@ void test_opencl() {
   );
   // calculator function for getting the size of the output
   auto get_out_size_7 = [=](const ivec&) {
-    return static_cast<size_t>(problem_size);
+    return problem_size;
   };
   // constant memory arguments
   const ivec arr7{problem_size};
@@ -360,16 +365,17 @@ void test_opencl() {
                      opencl::out<ivec>{get_out_size_7});
   self->send(w7, move(arr7));
   ivec expected5(problem_size);
-  fill(begin(expected5), end(expected5), problem_size);
+  fill(begin(expected5), end(expected5), static_cast<int>(problem_size));
   self->receive(
     [&](const ivec& result) {
-      check_vector_results("Eighth", expected5, result);
+      check_vector_results("Using const input argument", expected5, result);
     },
     others >> [&] {
       CAF_TEST_ERROR("Unexpected message "
                      << to_string(self->current_message()));
     }
   );
+  // test in_out argument type
   ivec input9 = make_iota_vector<int>(problem_size);
   ivec expected9{input9};
   std::transform(begin(expected9), end(expected9), begin(expected9),
@@ -380,7 +386,7 @@ void test_opencl() {
   self->send(w9, std::move(input9));
   self->receive(
     [&](const ivec& result) {
-      check_vector_results("Ninth", expected9, result);
+      check_vector_results("Testing in_out arugment", expected9, result);
     },
     others >> [&] {
       CAF_TEST_ERROR("Unexpected message "
