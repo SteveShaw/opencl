@@ -195,15 +195,14 @@ public:
                      args_vec& input_buffers, args_vec&, message& msg) {
     using container_type = typename detail::tl_at<unpacked_types, I>::type;
     using value_type = typename container_type::value_type;
-    auto value = msg.get_as<container_type>(I);
-    size_t buffer_size = sizeof(value_type) * value.size();
+    auto& value = msg.get_as<container_type>(I);
+    auto size = value.size();
+    size_t buffer_size = sizeof(value_type) * size;
     auto buffer = v2get(CAF_CLF(clCreateBuffer), context_.get(),
                         cl_mem_flags{CL_MEM_READ_WRITE}, buffer_size, nullptr);
-    // todo: this should use CL_FALSE, but leads to an error,
-    //       let's make it work with a blocking call first.
-    cl_event event = v1get<cl_event>(CAF_CLF(clEnqueueWriteBuffer),
-                                     queue_.get(), buffer, cl_bool{CL_TRUE},
-                                     cl_uint{0}, buffer_size, value.data());
+    auto event = v1get<cl_event>(CAF_CLF(clEnqueueWriteBuffer),
+                                 queue_.get(), buffer, cl_bool{CL_FALSE},
+                                 cl_uint{0}, buffer_size, value.data());
     events.push_back(std::move(event));
     mem_ptr tmp;
     tmp.reset(buffer, false);
@@ -217,14 +216,14 @@ public:
                      args_vec&, args_vec& output_buffers, message& msg) {
     using container_type = typename detail::tl_at<unpacked_types, I>::type;
     using value_type = typename container_type::value_type;
-    auto value = msg.get_as<container_type>(I);
+    auto& value = msg.get_as<container_type>(I);
     auto size = value.size();
     size_t buffer_size = sizeof(value_type) * size;
     auto buffer = v2get(CAF_CLF(clCreateBuffer), context_.get(),
                         cl_mem_flags{CL_MEM_READ_WRITE}, buffer_size, nullptr);
-    cl_event event = v1get<cl_event>(CAF_CLF(clEnqueueWriteBuffer),
-                                     queue_.get(), buffer, cl_bool{CL_FALSE},
-                                     cl_uint{0}, buffer_size, value.data());
+    auto event = v1get<cl_event>(CAF_CLF(clEnqueueWriteBuffer),
+                                 queue_.get(), buffer, cl_bool{CL_FALSE},
+                                 cl_uint{0}, buffer_size, value.data());
     events.push_back(std::move(event));
     mem_ptr tmp;
     tmp.reset(buffer, false);

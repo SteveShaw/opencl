@@ -219,7 +219,7 @@ void test_opencl() {
   self->send(w1, make_iota_vector<int>(matrix_size * matrix_size));
   self->receive (
     [&](const ivec& result) {
-      check_vector_results("Frist", expected1, result);
+      check_vector_results("First", expected1, result);
     },
     others >> [&] {
       CAF_TEST_ERROR("Unexpected message "
