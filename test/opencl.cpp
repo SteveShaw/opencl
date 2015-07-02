@@ -20,12 +20,13 @@ using ivec = std::vector<int>;
 constexpr size_t matrix_size = 4;
 constexpr size_t array_size = 32;
 
-constexpr int problem_size = 23;
+constexpr int problem_size = 1024;
 
 constexpr const char* kernel_name = "matrix_square";
 constexpr const char* kernel_name_compiler_flag = "compiler_flag";
 constexpr const char* kernel_name_reduce = "reduce";
 constexpr const char* kernel_name_const = "const_mod";
+constexpr const char* kernel_name_inout = "times_two";
 
 constexpr const char* compiler_flag = "-D CAF_OPENCL_TEST_FLAG";
 
@@ -89,6 +90,13 @@ constexpr const char* kernel_source_const = R"__(
                           __global int* output) {
     size_t idx = get_global_id(0);
     output[idx] = input[0];
+  }
+)__";
+
+constexpr const char* kernel_source_inout = R"__(
+  __kernel void times_two(__global int* values) {
+    size_t idx = get_global_id(0);
+    values[idx] = values[idx] * 2;
   }
 )__";
 
@@ -355,13 +363,29 @@ void test_opencl() {
   fill(begin(expected5), end(expected5), problem_size);
   self->receive(
     [&](const ivec& result) {
-      check_vector_results("Eigth", expected5, result);
+      check_vector_results("Eighth", expected5, result);
     },
     others >> [&] {
       CAF_TEST_ERROR("Unexpected message "
                      << to_string(self->current_message()));
     }
   );
+  ivec input9 = make_iota_vector<int>(problem_size);
+  ivec expected9{input9};
+  std::transform(begin(expected9), end(expected9), begin(expected9),
+                 [](const int& val){ return val * 2; });
+  auto w9 = spawn_cl(kernel_source_inout, kernel_name_inout,
+                     spawn_config{{problem_size}},
+                     opencl::in_out<ivec>{});
+  self->send(w9, std::move(input9));
+  self->receive(
+    [&](const ivec& result) {
+      check_vector_results("Ninth", expected9, result);
+    },
+    others >> [&] {
+      CAF_TEST_ERROR("Unexpected message "
+                     << to_string(self->current_message()));
+    });
 }
 
 CAF_TEST(test_opencl) {
