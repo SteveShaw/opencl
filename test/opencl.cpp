@@ -16,6 +16,7 @@ using namespace caf::opencl;
 namespace {
 
 using ivec = std::vector<int>;
+using dims = opencl::dim_vec;
 
 constexpr size_t matrix_size = 4;
 constexpr size_t array_size = 32;
@@ -221,7 +222,7 @@ void test_opencl() {
                        248, 286, 324, 362,
                        344, 398, 452, 506};
   auto w1 = spawn_cl(program::create(kernel_source), kernel_name,
-                     opencl::spawn_config{{matrix_size, matrix_size}},
+                     opencl::spawn_config{dims{matrix_size, matrix_size}},
                      opencl::in<ivec>{}, opencl::out<ivec>{});
   self->send(w1, make_iota_vector<int>(matrix_size * matrix_size));
   self->receive (
@@ -235,7 +236,7 @@ void test_opencl() {
                      << to_string(self->current_message()));
     }
   );
-  opencl::spawn_config cfg2{{matrix_size, matrix_size}};
+  opencl::spawn_config cfg2{dims{matrix_size, matrix_size}};
   auto w2 = spawn_cl(kernel_source, kernel_name, cfg2,
                      opencl::in<ivec>{}, opencl::out<ivec>{});
   self->send(w2, make_iota_vector<int>(matrix_size * matrix_size));
@@ -260,7 +261,7 @@ void test_opencl() {
   auto map_res = [=](ivec result) -> message {
     return make_message(matrix_type{std::move(result)});
   };
-  opencl::spawn_config cfg3{{matrix_size, matrix_size}};
+  opencl::spawn_config cfg3{dims{matrix_size, matrix_size}};
   auto w3 = spawn_cl(program::create(kernel_source), kernel_name, cfg3,
                      map_arg, map_res,
                      opencl::in<ivec>{}, opencl::out<ivec>{});
@@ -276,7 +277,7 @@ void test_opencl() {
                      << to_string(self->current_message()));
     }
   );
-  opencl::spawn_config cfg4{{matrix_size, matrix_size}};
+  opencl::spawn_config cfg4{dims{matrix_size, matrix_size}};
   auto w4 = spawn_cl(kernel_source, kernel_name, cfg4,
                      map_arg, map_res,
                      opencl::in<ivec>{}, opencl::out<ivec>{});
@@ -306,7 +307,7 @@ void test_opencl() {
   }
   // test for opencl compiler flags
   auto prog5 = program::create(kernel_source_compiler_flag, compiler_flag);
-  opencl::spawn_config cfg5{{array_size}};
+  opencl::spawn_config cfg5{dims{array_size}};
   auto w5 = spawn_cl(prog5, kernel_name_compiler_flag, cfg5,
                      opencl::in<ivec>{}, opencl::out<ivec>{});
   self->send(w5, make_iota_vector<int>(array_size));
@@ -331,9 +332,9 @@ void test_opencl() {
   ivec arr6(reduce_buffer_size);
   int n = static_cast<int>(arr6.capacity());
   std::generate(arr6.begin(), arr6.end(), [&]{ return --n; });
-  opencl::spawn_config cfg6{{reduce_global_size},
-                            { /* no offsets */ },
-                            {reduce_local_size}};
+  opencl::spawn_config cfg6{dims{reduce_global_size},
+                            dims{ /* no offsets */ },
+                            dims{reduce_local_size}};
   auto get_out_size_6 = [=](const ivec&) {
     return reduce_result_size;
   };
@@ -360,7 +361,7 @@ void test_opencl() {
   // constant memory arguments
   const ivec arr7{problem_size};
   auto w7 = spawn_cl(kernel_source_const, kernel_name_const,
-                     opencl::spawn_config{{problem_size}},
+                     opencl::spawn_config{dims{problem_size}},
                      opencl::in<ivec>{},
                      opencl::out<ivec>{get_out_size_7});
   self->send(w7, move(arr7));
@@ -381,7 +382,7 @@ void test_opencl() {
   std::transform(begin(expected9), end(expected9), begin(expected9),
                  [](const int& val){ return val * 2; });
   auto w9 = spawn_cl(kernel_source_inout, kernel_name_inout,
-                     spawn_config{{problem_size}},
+                     spawn_config{dims{problem_size}},
                      opencl::in_out<ivec>{});
   self->send(w9, std::move(input9));
   self->receive(
@@ -391,7 +392,8 @@ void test_opencl() {
     others >> [&] {
       CAF_TEST_ERROR("Unexpected message "
                      << to_string(self->current_message()));
-    });
+    }
+  );
 }
 
 CAF_TEST(test_opencl) {
@@ -401,4 +403,3 @@ CAF_TEST(test_opencl) {
   await_all_actors_done();
   shutdown();
 }
-

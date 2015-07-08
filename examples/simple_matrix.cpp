@@ -27,8 +27,11 @@
 
 using namespace std;
 using namespace caf;
+using namespace caf::opencl;
 
 namespace {
+
+using fvec = std::vector<float>;
 
 constexpr size_t matrix_size = 8;
 constexpr const char* kernel_name = "matrix_mult";
@@ -53,7 +56,7 @@ constexpr const char* kernel_source = R"__(
 
 } // namespace <anonymous>
 
-void print_as_matrix(const vector<float>& matrix) {
+void print_as_matrix(const fvec& matrix) {
   for (size_t column = 0; column < matrix_size; ++column) {
     for (size_t row = 0; row < matrix_size; ++row) {
       cout << fixed << setprecision(2) << setw(9)
@@ -66,8 +69,8 @@ void print_as_matrix(const vector<float>& matrix) {
 void multiplier(event_based_actor* self) {
   // the opencl actor only understands vectors
   // so these vectors represent the matrices
-  vector<float> m1(matrix_size * matrix_size);
-  vector<float> m2(matrix_size * matrix_size);
+  fvec m1(matrix_size * matrix_size);
+  fvec m2(matrix_size * matrix_size);
 
   // fill each with ascending values
   iota(m1.begin(), m1.end(), 0);
@@ -89,13 +92,11 @@ void multiplier(event_based_actor* self) {
   // 4th to Nth arg: the kernel signature described by in/out/in_out classes
   //          that contain the argument type in their template, requires vectors
   auto worker = spawn_cl(kernel_source, kernel_name,
-                         opencl::spawn_config{{matrix_size, matrix_size}},
-                         opencl::in<vector<float>>{},
-                         opencl::in<vector<float>>{},
-                         opencl::out<vector<float>>{});
+                         spawn_config{dim_vec{matrix_size, matrix_size}},
+                         in<fvec>{}, in<fvec>{}, out<fvec>{});
   // send both matrices to the actor and wait for a result
   self->sync_send(worker, move(m1), move(m2)).then(
-    [](const vector<float>& result) {
+    [](const fvec& result) {
       cout << "result: " << endl;
       print_as_matrix(result);
     }
@@ -103,7 +104,7 @@ void multiplier(event_based_actor* self) {
 }
 
 int main() {
-  announce<vector<float>>("float_vector");
+  announce<fvec>("float_vector");
   spawn(multiplier);
   await_all_actors_done();
   shutdown();

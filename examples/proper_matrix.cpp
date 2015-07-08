@@ -28,6 +28,7 @@
 
 using namespace std;
 using namespace caf;
+using namespace caf::opencl;
 
 namespace {
 
@@ -169,10 +170,9 @@ void multiplier(event_based_actor* self) {
   // from 6 : a description of the kernel signature using in/out/in_out classes
   //          with the argument type packed in vectors
   auto worker = spawn_cl(kernel_source, kernel_name,
-                         opencl::spawn_config{{matrix_size, matrix_size}},
+                         spawn_config{dim_vec{matrix_size, matrix_size}},
                          unbox_args, box_res,
-                         opencl::in<fvec>{}, opencl::in<fvec>{},
-                         opencl::out<fvec>{});
+                         in<fvec>{}, in<fvec>{}, out<fvec>{});
 
   // send both matrices to the actor and
   // wait for results in form of a matrix_type
