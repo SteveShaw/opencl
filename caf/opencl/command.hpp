@@ -94,7 +94,7 @@ public:
     } else {
       enqueue_read_buffers(event_k, detail::get_indices(result_buffers_));
       cl_event marker;
-#if defined (CL_VERSION_1_2)
+#if defined(__APPLE__)
       err = clEnqueueMarkerWithWaitList(queue_.get(), mem_out_events_.size(),
                                         mem_out_events_.data(), &marker);
 #else
