@@ -175,7 +175,7 @@ public:
 
   void add_kernel_arguments(evnt_vec&, args_vec&, args_vec&, size_vec&,
                             message&, detail::int_list<>) {
-    clFlush(queue_.get());
+    // nop
   }
 
   /// the separation into input and output is required, because we need to
