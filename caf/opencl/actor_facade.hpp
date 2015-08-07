@@ -115,13 +115,14 @@ public:
     };
     check_vec(config.offsets(), "offsets");
     check_vec(config.local_dimensions(), "local dimensions");
-    kernel_ptr kernel;
-    kernel.reset(v2get(CAF_CLF(clCreateKernel), prog.program_.get(),
-                       kernel_name),
-                 false);
-    return new actor_facade(prog, kernel, config,
-                            std::move(map_args), std::move(map_result),
-                            std::forward_as_tuple(xs...));
+    auto itr = prog.available_kernels_.find(kernel_name);
+    if (itr == prog.available_kernels_.end()) {
+      return nullptr;
+    } else {
+      return new actor_facade(prog, itr->second, config,
+                              std::move(map_args), std::move(map_result),
+                              std::forward_as_tuple(xs...));
+    }
   }
 
   void enqueue(const actor_addr &sender, message_id mid, message content,

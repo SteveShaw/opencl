@@ -45,11 +45,13 @@ public:
                         const char* options = nullptr, uint32_t device_id = 0);
 
 private:
-  program(context_ptr context, command_queue_ptr queue, program_ptr program);
+  program(context_ptr context, command_queue_ptr queue, program_ptr program,
+          std::map<std::string,kernel_ptr> available_kernels);
 
   context_ptr context_;
   program_ptr program_;
   command_queue_ptr queue_;
+  std::map<std::string,kernel_ptr> available_kernels_;
 };
 
 } // namespace opencl
