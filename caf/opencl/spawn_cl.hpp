@@ -206,6 +206,46 @@ actor spawn_cl(const char* source,
 
 // !!! Below are the deprecated spawn_cl functions !!!
 
+// Signature first to mark them deprcated, gcc will complain otherwise
+
+template <class Signature>
+actor spawn_cl(const opencl::program& prog,
+               const char* fname,
+               const opencl::dim_vec& dims,
+               const opencl::dim_vec& offset = {},
+               const opencl::dim_vec& local_dims = {},
+               size_t result_size = 0) CAF_DEPRECATED;
+
+template <class Signature>
+actor spawn_cl(const char* source,
+               const char* fname,
+               const opencl::dim_vec& dims,
+               const opencl::dim_vec& offset = {},
+               const opencl::dim_vec& local_dims = {},
+               size_t result_size = 0) CAF_DEPRECATED;
+
+template <class Signature, class Fun>
+actor spawn_cl(const opencl::program& prog,
+               const char* fname,
+               std::function<optional<message> (message&)> map_args,
+               Fun map_result,
+               const opencl::dim_vec& dims,
+               const opencl::dim_vec& offset = {},
+               const opencl::dim_vec& local_dims = {},
+               size_t result_size = 0) CAF_DEPRECATED;
+
+template <class Signature, class Fun>
+actor spawn_cl(const char* source,
+               const char* fname,
+               std::function<optional<message> (message&)> map_args,
+               Fun map_result,
+               const opencl::dim_vec& dims,
+               const opencl::dim_vec& offset = {},
+               const opencl::dim_vec& local_dims = {},
+               size_t result_size = 0) CAF_DEPRECATED;
+
+// now the implementations
+
 /// Creates a new actor facade for an OpenCL kernel that invokes
 /// the function named `fname` from `prog`.
 /// @throws std::runtime_error if more than three dimensions are set,
@@ -214,9 +254,9 @@ template <class Signature>
 actor spawn_cl(const opencl::program& prog,
                const char* fname,
                const opencl::dim_vec& dims,
-               const opencl::dim_vec& offset = {},
-               const opencl::dim_vec& local_dims = {},
-               size_t result_size = 0) CAF_DEPRECATED {
+               const opencl::dim_vec& offset,
+               const opencl::dim_vec& local_dims,
+               size_t result_size) {
   detail::cl_spawn_helper_deprecated<Signature> f;
   return f(prog, fname, opencl::spawn_config{dims, offset, local_dims},
            result_size);
@@ -231,9 +271,9 @@ template <class Signature>
 actor spawn_cl(const char* source,
                const char* fname,
                const opencl::dim_vec& dims,
-               const opencl::dim_vec& offset = {},
-               const opencl::dim_vec& local_dims = {},
-               size_t result_size = 0) CAF_DEPRECATED {
+               const opencl::dim_vec& offset,
+               const opencl::dim_vec& local_dims,
+               size_t result_size) {
   detail::cl_spawn_helper_deprecated<Signature> f;
   return f(opencl::program::create(source), fname,
            opencl::spawn_config{dims, offset, local_dims}, result_size);
@@ -249,9 +289,9 @@ actor spawn_cl(const opencl::program& prog,
                std::function<optional<message> (message&)> map_args,
                Fun map_result,
                const opencl::dim_vec& dims,
-               const opencl::dim_vec& offset = {},
-               const opencl::dim_vec& local_dims = {},
-               size_t result_size = 0) CAF_DEPRECATED {
+               const opencl::dim_vec& offset,
+               const opencl::dim_vec& local_dims,
+               size_t result_size) {
   detail::cl_spawn_helper_deprecated<Signature> f;
   return f(prog, fname, opencl::spawn_config{dims, offset, local_dims},
            result_size, std::move(map_args), std::move(map_result));
@@ -268,9 +308,9 @@ actor spawn_cl(const char* source,
                std::function<optional<message> (message&)> map_args,
                Fun map_result,
                const opencl::dim_vec& dims,
-               const opencl::dim_vec& offset = {},
-               const opencl::dim_vec& local_dims = {},
-               size_t result_size = 0) CAF_DEPRECATED {
+               const opencl::dim_vec& offset,
+               const opencl::dim_vec& local_dims,
+               size_t result_size) {
   detail::cl_spawn_helper_deprecated<Signature> f;
   return f(opencl::program::create(source), fname,
            opencl::spawn_config{dims, offset, local_dims},
