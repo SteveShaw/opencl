@@ -38,6 +38,8 @@ namespace caf {
 
 namespace detail {
 
+struct tuple_construct { };
+
 template <class... Ts>
 struct cl_spawn_helper {
   using impl = opencl::actor_facade<Ts...>;
@@ -48,16 +50,82 @@ struct cl_spawn_helper {
                    const opencl::spawn_config& cfg, Ts&&... xs) const {
     return actor_cast<actor>(impl::create(p, fn, cfg,
                                           map_in_fun{}, map_out_fun{},
-                                          std::forward<Ts>(xs)...));
+                                          std::move(xs)...));
   }
-
   actor operator()(const opencl::program& p, const char* fn,
                    const opencl::spawn_config& cfg,
                    map_in_fun map_input, map_out_fun map_output,
                    Ts&&... xs) const {
     return actor_cast<actor>(impl::create(p, fn, cfg, std::move(map_input),
                                           std::move(map_output),
-                                          std::forward<Ts>(xs)...));
+                                          std::move(xs)...));
+  }
+  // used by the deprecated spawn_helper
+  template <class Tuple, long... Is>
+  actor operator()(tuple_construct,
+                   const opencl::program& p, const char* fn,
+                   const opencl::spawn_config& cfg,
+                   Tuple&& xs,
+                   detail::int_list<Is...>) const {
+    return actor_cast<actor>(impl::create(p, fn, cfg,
+                                          map_in_fun{}, map_out_fun{},
+                                          std::move(std::get<Is>(xs))...));
+  }
+  template <class Tuple, long... Is>
+  actor operator()(tuple_construct,
+                   const opencl::program& p, const char* fn,
+                   const opencl::spawn_config& cfg,
+                   map_in_fun map_input, map_out_fun map_output,
+                   Tuple&& xs,
+                   detail::int_list<Is...>) const {
+    return actor_cast<actor>(impl::create(p, fn, cfg,std::move(map_input),
+                                          std::move(map_output),
+                                          std::move(std::get<Is>(xs))...));
+  }
+};
+
+template <class Signature>
+struct cl_spawn_helper_deprecated;
+
+template <class R, class... Ts>
+struct cl_spawn_helper_deprecated<R(Ts...)> {
+  using input_types
+    = detail::type_list<typename opencl::carr_to_vec<Ts>::type...>;
+  using wrapped_input_types
+    = typename detail::tl_map<input_types,opencl::to_input_arg>::type;
+  using wrapped_output_type
+    = opencl::out<typename opencl::carr_to_vec<R>::type>;
+  using all_types =
+    typename detail::tl_push_back<
+      wrapped_input_types,
+      wrapped_output_type
+    >::type;
+  using values = typename detail::tl_apply<all_types, std::tuple>::type;
+  using helper_type =
+    typename detail::tl_apply<all_types, cl_spawn_helper>::type;
+  actor operator()(const opencl::program& p, const char* fn,
+                   const opencl::spawn_config& conf,
+                   size_t result_size) const {
+    values xs;
+    std::get<tl_size<all_types>::value - 1>(xs) =
+      wrapped_output_type{[result_size](Ts&...){ return result_size; }};
+    helper_type f;
+    return f(tuple_construct{}, p, fn, conf, std::move(xs),
+             detail::get_indices(xs));
+  }
+  actor operator()(const opencl::program& p, const char* fn,
+                   const opencl::spawn_config& conf,
+                   size_t result_size,
+                   typename helper_type::map_in_fun map_args,
+                   typename helper_type::map_out_fun map_results) const {
+    values xs;
+    std::get<tl_size<all_types>::value - 1>(xs) =
+      wrapped_output_type{[result_size](Ts&...){ return result_size; }};
+    auto indices = detail::get_indices(xs);
+    helper_type f;
+    return f(tuple_construct{}, p, fn, conf,
+             std::move(map_args), std::move(map_results),
+             std::move(xs), std::move(indices));
   }
 };
 
@@ -133,6 +201,80 @@ actor spawn_cl(const char* source,
   return f(opencl::program::create(source), fname, config,
            std::move(map_args), std::move(map_result),
            std::forward<Ts>(xs)...);
+}
+
+
+// !!! Below are the deprecated spawn_cl functions !!!
+
+/// Creates a new actor facade for an OpenCL kernel that invokes
+/// the function named `fname` from `prog`.
+/// @throws std::runtime_error if more than three dimensions are set,
+///                            `dims.empty()`, or `clCreateKernel` failed.
+template <class Signature>
+actor spawn_cl(const opencl::program& prog,
+               const char* fname,
+               const opencl::dim_vec& dims,
+               const opencl::dim_vec& offset = {},
+               const opencl::dim_vec& local_dims = {},
+               size_t result_size = 0) CAF_DEPRECATED {
+  detail::cl_spawn_helper_deprecated<Signature> f;
+  return f(prog, fname, opencl::spawn_config{dims, offset, local_dims},
+           result_size);
+}
+
+/// Compiles `source` and creates a new actor facade for an OpenCL kernel
+/// that invokes the function named `fname`.
+/// @throws std::runtime_error if more than three dimensions are set,
+///                            <tt>dims.empty()</tt>, a compilation error
+///                            occured, or @p clCreateKernel failed.
+template <class Signature>
+actor spawn_cl(const char* source,
+               const char* fname,
+               const opencl::dim_vec& dims,
+               const opencl::dim_vec& offset = {},
+               const opencl::dim_vec& local_dims = {},
+               size_t result_size = 0) CAF_DEPRECATED {
+  detail::cl_spawn_helper_deprecated<Signature> f;
+  return f(opencl::program::create(source), fname,
+           opencl::spawn_config{dims, offset, local_dims}, result_size);
+}
+
+/// Creates a new actor facade for an OpenCL kernel that invokes
+/// the function named `fname` from `prog`.
+/// @throws std::runtime_error if more than three dimensions are set,
+///                            `dims.empty()`, or `clCreateKernel` failed.
+template <class Signature, class Fun>
+actor spawn_cl(const opencl::program& prog,
+               const char* fname,
+               std::function<optional<message> (message&)> map_args,
+               Fun map_result,
+               const opencl::dim_vec& dims,
+               const opencl::dim_vec& offset = {},
+               const opencl::dim_vec& local_dims = {},
+               size_t result_size = 0) CAF_DEPRECATED {
+  detail::cl_spawn_helper_deprecated<Signature> f;
+  return f(prog, fname, opencl::spawn_config{dims, offset, local_dims},
+           result_size, std::move(map_args), std::move(map_result));
+}
+
+/// Compiles `source` and creates a new actor facade for an OpenCL kernel
+/// that invokes the function named `fname`.
+/// @throws std::runtime_error if more than three dimensions are set,
+///                            <tt>dims.empty()</tt>, a compilation error
+///                            occured, or @p clCreateKernel failed.
+template <class Signature, class Fun>
+actor spawn_cl(const char* source,
+               const char* fname,
+               std::function<optional<message> (message&)> map_args,
+               Fun map_result,
+               const opencl::dim_vec& dims,
+               const opencl::dim_vec& offset = {},
+               const opencl::dim_vec& local_dims = {},
+               size_t result_size = 0) CAF_DEPRECATED {
+  detail::cl_spawn_helper_deprecated<Signature> f;
+  return f(opencl::program::create(source), fname,
+           opencl::spawn_config{dims, offset, local_dims},
+           result_size, std::move(map_args), std::move(map_result));
 }
 
 } // namespace caf

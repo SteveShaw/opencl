@@ -130,6 +130,18 @@ public:
     }
   }
 
+private:
+  std::vector<size_t> result_sizes_;
+  response_promise handle_;
+  intrusive_ptr<FacadeType> actor_facade_;
+  command_queue_ptr queue_;
+  std::vector<cl_event> mem_in_events_;
+  std::vector<cl_event> mem_out_events_;
+  std::vector<mem_ptr> input_buffers_;
+  std::vector<mem_ptr> output_buffers_;
+  std::tuple<Ts...> result_buffers_;
+  message msg_; // required to keep the argument buffers alive (async copy)
+
   void enqueue_read_buffers(cl_event&, detail::int_list<>) {
     // nop, end of recursion
   }
@@ -155,18 +167,6 @@ public:
     mem_out_events_.push_back(std::move(event));
     enqueue_read_buffers(kernel_done, detail::int_list<Is...>{});
   }
-
-private:
-  std::vector<size_t> result_sizes_;
-  response_promise handle_;
-  intrusive_ptr<FacadeType> actor_facade_;
-  command_queue_ptr queue_;
-  std::vector<cl_event> mem_in_events_;
-  std::vector<cl_event> mem_out_events_;
-  std::vector<mem_ptr> input_buffers_;
-  std::vector<mem_ptr> output_buffers_;
-  std::tuple<Ts...> result_buffers_;
-  message msg_; // required to keep the argument buffers alive (async copy)
 
   void handle_results() {
     auto& map_fun = actor_facade_->map_results_;

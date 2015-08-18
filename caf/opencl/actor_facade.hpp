@@ -67,7 +67,6 @@ struct command_sig_from_outputs<T, detail::type_list<Ts...>> {
 template <class... Ts>
 class actor_facade : public abstract_actor {
 public:
-//  using arg_types = detail::type_list<typename carr_to_vec<Ts>::type...>;
   using arg_types = detail::type_list<Ts...>;
   using unpacked_types = typename detail::tl_map<arg_types, extract_type>::type;
 
@@ -83,7 +82,6 @@ public:
     typename detail::tl_map<output_wrapped_types, extract_type>::type;
   using output_mapping = typename function_sig_from_outputs<output_types>::type;
 
-//  using indices = typename detail::il_indices<arg_types>::type;
   typename detail::il_indices<arg_types>::type indices;
 
   using evnt_vec = std::vector<cl_event>;

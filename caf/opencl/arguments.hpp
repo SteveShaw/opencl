@@ -156,6 +156,18 @@ struct message_from_results {
   }
 };
 
+/// Helpers for conversion in deprecated spawn functions
+
+template <class T>
+struct to_input_arg {
+  using type = in<T>;
+};
+
+template <class T>
+struct to_output_arg {
+  using type = out<T>;
+};
+
 } // namespace opencl
 } // namespace caf
 
