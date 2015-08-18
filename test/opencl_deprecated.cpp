@@ -10,6 +10,8 @@
 #include "caf/all.hpp"
 #include "caf/opencl/spawn_cl.hpp"
 
+CAF_PUSH_NO_DEPRECATED_WARNING
+
 using namespace caf;
 using namespace caf::opencl;
 
@@ -344,3 +346,4 @@ CAF_TEST(test_opencl_deprecated) {
   std::cout << "Done with depreacted OpenCL test" << std::endl;
 }
 
+CAF_POP_WARNINGS
