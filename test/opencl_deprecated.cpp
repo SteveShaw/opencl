@@ -292,8 +292,8 @@ void test_opencl_deprecated() {
 
   auto get_max_workgroup_size = [](size_t dev_id, size_t dims) -> size_t {
     size_t max_size = 512;
-    auto devices = opencl_metainfo::instance()->get_devices()[dev_id];
-    size_t dimsize = devices.get_max_work_items_per_dim()[dims];
+    auto device = metainfo::instance()->get_devices()[dev_id];
+    size_t dimsize = device.get_max_work_item_sizes()[dims];
     return max_size < dimsize ? max_size : dimsize;
   };
 

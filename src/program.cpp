@@ -27,7 +27,7 @@
 
 #include "caf/opencl/program.hpp"
 #include "caf/opencl/opencl_err.hpp"
-#include "caf/opencl/opencl_metainfo.hpp"
+#include "caf/opencl/metainfo.hpp"
 
 using namespace std;
 
@@ -44,9 +44,9 @@ program::program(context_ptr context, command_queue_ptr queue,
 
 program program::create(const char* kernel_source, const char* options,
                         uint32_t device_id) {
-  auto metainfo = opencl_metainfo::instance();
-  auto devices  = metainfo->get_devices();
-  auto context  = metainfo->context_;
+  auto info = metainfo::instance();
+  auto devices  = info->get_devices();
+  auto context  = info->context_;
   if (devices.size() <= device_id) {
     ostringstream oss;
     oss << "Device id " << device_id
@@ -55,21 +55,26 @@ program program::create(const char* kernel_source, const char* options,
     CAF_LOGF_ERROR(oss.str());
     throw runtime_error(oss.str());
   }
+  auto dev = info->get_device(device_id);
+  return create(kernel_source, options, dev);
+}
+program program::create(const char* kernel_source, const char* options,
+                        const device& dev);
   // create program object from kernel source
   size_t kernel_source_length = strlen(kernel_source);
   program_ptr pptr;
-  auto rawptr = v2get(CAF_CLF(clCreateProgramWithSource),context.get(),
+  auto rawptr = v2get(CAF_CLF(clCreateProgramWithSource), context.get(),
                       cl_uint{1}, &kernel_source, &kernel_source_length);
   pptr.reset(rawptr, false);
   // build programm from program object
-  auto dev_tmp = devices[device_id].device_.get();
+  auto dev_tmp = dev.device_id_.get();
   cl_int err = clBuildProgram(pptr.get(), 1, &dev_tmp,
                               options,nullptr, nullptr);
   if (err != CL_SUCCESS) {
     ostringstream oss;
     oss << "clBuildProgram: " << get_opencl_error(err);
 // the build log will be printed by the
-// pfn_notify (see opencl_metainfo.cpp)
+// pfn_notify (see metainfo.cpp)
 #ifndef __APPLE__
     // seems that just apple implemented the
     // pfn_notify callback, but we can get
@@ -121,8 +126,7 @@ program program::create(const char* kernel_source, const char* options,
     kernel.reset(move(kernels[i]));
     available_kernels.emplace(string(name.data()), move(kernel));
   }
-  return {context, devices[device_id].cmd_queue_, pptr,
-          move(available_kernels)};
+  return {context, dev.command_queue_, pptr, move(available_kernels)};
 }
 
 } // namespace opencl

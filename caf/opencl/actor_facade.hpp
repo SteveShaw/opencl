@@ -46,7 +46,7 @@
 namespace caf {
 namespace opencl {
 
-class opencl_metainfo;
+class metainfo;
 
 template <class List>
 struct function_sig_from_outputs;
