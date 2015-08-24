@@ -31,6 +31,9 @@ class platform {
 
 public:
   inline const std::vector<device>& get_devices() const;
+  inline const std::string& get_name() const;
+  inline const std::string& get_vendor() const;
+  inline const std::string& get_version() const;
   static platform create(cl_platform_id platform_id, unsigned start_id);
 
 private:
@@ -53,6 +56,18 @@ private:
 
 inline const std::vector<device>& platform::get_devices() const {
   return devices_;
+}
+
+inline const std::string& platform::get_name() const {
+  return name_;
+}
+
+inline const std::string& platform::get_vendor() const {
+  return vendor_;
+}
+
+inline const std::string& platform::get_version() const {
+  return version_;
 }
 
 

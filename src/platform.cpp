@@ -30,33 +30,19 @@ namespace opencl {
 
 platform platform::create(cl_platform_id platform_id,
                           unsigned start_id) {
-  // cl_uint discoverd;
-  // auto err = clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_ALL, 0, nullptr, &discoverd);
-  // cout << "Found " << discoverd << " devices" << endl;
-  // auto num_devices =
-  //   v1get<cl_uint>(CAF_CLF(clGetDeviceIDs), platform_id, CL_DEVICE_TYPE_ALL);
-  // vector<cl_device_id> ids(num_devices);
-  // v2callcl(CAF_CLF(clGetDeviceIDs), platform_id, CL_DEVICE_TYPE_ALL,
-  //          num_devices, ids.data());
   vector<unsigned> device_types = {CL_DEVICE_TYPE_GPU,
                                    CL_DEVICE_TYPE_ACCELERATOR,
                                    CL_DEVICE_TYPE_CPU};
   vector<cl_device_id> ids;
   for (cl_device_type device_type : device_types) {
-    cout << "Looking for " << device_type_from_ulong(device_type)
-         << endl;
     auto known = ids.size();
     cl_uint discoverd;
-    auto err = clGetDeviceIDs(platform_id, device_type, 0, nullptr,
-                              &discoverd);
+    auto err = clGetDeviceIDs(platform_id, device_type, 0, nullptr, &discoverd);
     if (err == CL_DEVICE_NOT_FOUND) {
-      cout << "--> no devices of the type found" << endl;
       continue; // no devices of the type found
     } else if (err != CL_SUCCESS) {
-      cout << "### ERROR" << endl;
       throwcl("clGetDeviceIDs", err);
     }
-    cout << "--> found " << discoverd << " device(s)!" << endl;
     ids.resize(known + discoverd);
     v2callcl(CAF_CLF(clGetDeviceIDs), platform_id, device_type,
              discoverd, (ids.data() + known));

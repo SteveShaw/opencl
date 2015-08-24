@@ -33,8 +33,6 @@ namespace opencl {
 device device::create(context_ptr context, device_ptr device_id, unsigned id) {
   CAF_LOGF_DEBUG("creating device for opencl device id '"
                  << device_id.get() << "' with id '" << id << "'");
-  cout << "Initializing device for opencl device id '"
-       << device_id.get() << "' with id '" << id << "'"<< endl;
   // look up properties we need to create the command queue
   auto supported = info<cl_ulong>(device_id, CL_DEVICE_QUEUE_PROPERTIES);
   bool profiling = supported & CL_QUEUE_PROFILING_ENABLE;
@@ -47,9 +45,9 @@ device device::create(context_ptr context, device_ptr device_id, unsigned id) {
                             device_id.get(), properties),
                       false);
   // create the device
-  device dev{device_id, move(command_queue), context, id};
+  device dev{device_id, command_queue, context, id};
   // look up device properties
-  dev.address_bits_  = info<cl_uint>(device_id, CL_DEVICE_ADDRESS_BITS);
+  dev.address_bits_ = info<cl_uint>(device_id, CL_DEVICE_ADDRESS_BITS);
   dev.little_endian_ = info<cl_bool>(device_id, CL_DEVICE_ENDIAN_LITTLE);
   dev.global_mem_cache_size_ =
     info<cl_ulong>(device_id, CL_DEVICE_GLOBAL_MEM_CACHE_SIZE);
@@ -93,7 +91,6 @@ device device::create(context_ptr context, device_ptr device_id, unsigned id) {
   dev.device_vendor_ = info_string(device_id, CL_DEVICE_VENDOR);
   dev.device_version_ = info_string(device_id, CL_DEVICE_VERSION);
   dev.name_ = info_string(device_id, CL_DEVICE_NAME);
-  cout << "device is named '" << dev.name_ << "'" << endl;
   return dev;
 }
 
@@ -113,8 +110,8 @@ string device::info_string(device_ptr device_id, unsigned info_flag) {
   return string(buffer.data());
 }
 
-device::device(device_ptr device_id, command_queue_ptr queue, context_ptr context,
-               unsigned id)
+device::device(device_ptr device_id, command_queue_ptr queue,
+               context_ptr context, unsigned id)
   : device_id_(device_id),
     command_queue_(queue),
     context_(context),

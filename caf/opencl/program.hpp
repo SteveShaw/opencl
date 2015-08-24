@@ -23,6 +23,7 @@
 #include <map>
 #include <memory>
 
+#include "caf/opencl/device.hpp"
 #include "caf/opencl/global.hpp"
 #include "caf/opencl/smart_ptr.hpp"
 
@@ -49,7 +50,7 @@ public:
   ///        from a given @p kernel_source.
   /// @returns A program object.
   static program create(const char* kernel_source,
-                        const char* options = nullptr, const device& device);
+                        const char* options, const device& dev);
 private:
   program(context_ptr context, command_queue_ptr queue, program_ptr program,
           std::map<std::string,kernel_ptr> available_kernels);

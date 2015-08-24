@@ -18,6 +18,7 @@
  * http://www.boost.org/LICENSE_1_0.txt.                                      *
  ******************************************************************************/
 
+#include "caf/opencl/device.hpp"
 #include "caf/opencl/metainfo.hpp"
 #include "caf/opencl/platform.hpp"
 #include "caf/opencl/opencl_err.hpp"
@@ -37,15 +38,20 @@ const std::vector<device>& metainfo::get_devices() const {
 }
 
 const optional<const device&> metainfo::get_device(size_t id) {
-  if (platforms.empty()) {
+  if (platforms_.empty())
     return none;
-  }
-  int i = 0;
-  platform& p; = platforms[i]:
-  size_t available_device; = p.get_devices().size();
+  size_t i = 0;
+  platform& p = platforms_[0];
+  size_t from = 0;
+  size_t to = 0;
   do {
-
-  } while (id >= available_device && ++i < platforms.size());
+    from = to;
+    p = platforms_[i];
+    to += p.get_devices().size();
+  } while (id >= to && ++i < platforms_.size());
+  if (id < to)
+    return p.get_devices()[id - from];
+  return none;
 }
 
 void metainfo::initialize() {
@@ -54,15 +60,13 @@ void metainfo::initialize() {
   // get platform ids
   std::vector<cl_platform_id> platform_ids(num_platforms);
   v2callcl(CAF_CLF(clGetPlatformIDs), num_platforms, platform_ids.data());
-  if (platform_ids.empty()) {
+  if (platform_ids.empty())
     throw std::runtime_error("no OpenCL platform found");
-  }
   // initialize platforms (device discovery)
-  std::vector<platform> platforms;
   auto current_device_id = 0;
   for (auto& id : platform_ids) {
-    platforms.push_back(platform::create(id, current_device_id));
-    current_device_id += platforms.back().get_devices().size();
+    platforms_.push_back(platform::create(id, current_device_id));
+    current_device_id += platforms_.back().get_devices().size();
   }
 }
 

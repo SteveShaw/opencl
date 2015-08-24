@@ -23,11 +23,12 @@
 #include <vector>
 
 #include "caf/opencl/global.hpp"
-#include "caf/opencl/program.hpp"
 #include "caf/opencl/smart_ptr.hpp"
 
 namespace caf {
 namespace opencl {
+
+class program;
 
 class device {
   friend class program;

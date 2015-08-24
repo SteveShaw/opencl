@@ -26,8 +26,8 @@
 #include "caf/detail/singletons.hpp"
 
 #include "caf/opencl/program.hpp"
-#include "caf/opencl/opencl_err.hpp"
 #include "caf/opencl/metainfo.hpp"
+#include "caf/opencl/opencl_err.hpp"
 
 using namespace std;
 
@@ -45,25 +45,24 @@ program::program(context_ptr context, command_queue_ptr queue,
 program program::create(const char* kernel_source, const char* options,
                         uint32_t device_id) {
   auto info = metainfo::instance();
-  auto devices  = info->get_devices();
-  auto context  = info->context_;
-  if (devices.size() <= device_id) {
+  auto dev = info->get_device(device_id);
+  if (!dev) {
     ostringstream oss;
-    oss << "Device id " << device_id
-        << " is not a vaild device. Maximum id is: " << (devices.size() - 1)
-        << ".";
+    oss << "No device with id '" << device_id << "' found.";
     CAF_LOGF_ERROR(oss.str());
     throw runtime_error(oss.str());
   }
-  auto dev = info->get_device(device_id);
-  return create(kernel_source, options, dev);
+  return program::create(kernel_source, options, *dev);
 }
+
 program program::create(const char* kernel_source, const char* options,
-                        const device& dev);
+                        const device& dev) {
   // create program object from kernel source
   size_t kernel_source_length = strlen(kernel_source);
   program_ptr pptr;
-  auto rawptr = v2get(CAF_CLF(clCreateProgramWithSource), context.get(),
+  std::cout << "Creating program for " << dev.name_ << std::endl;
+  context_ptr cntxt = dev.context_;
+  auto rawptr = v2get(CAF_CLF(clCreateProgramWithSource), cntxt.get(),
                       cl_uint{1}, &kernel_source, &kernel_source_length);
   pptr.reset(rawptr, false);
   // build programm from program object
@@ -126,7 +125,7 @@ program program::create(const char* kernel_source, const char* options,
     kernel.reset(move(kernels[i]));
     available_kernels.emplace(string(name.data()), move(kernel));
   }
-  return {context, dev.command_queue_, pptr, move(available_kernels)};
+  return {dev.context_, dev.command_queue_, pptr, move(available_kernels)};
 }
 
 } // namespace opencl
