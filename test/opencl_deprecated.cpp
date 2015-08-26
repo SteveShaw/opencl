@@ -190,7 +190,7 @@ void check_vector_results(const std::string& description,
                           const std::vector<T>& result) {
   auto cond = (expected == result);
   CAF_CHECK(cond);
-  if (!cond) {
+  if (! cond) {
     CAF_TEST_INFO(description << " failed.");
     std::cout << "Expected: " << std::endl;
     for (size_t i = 0; i < expected.size(); ++i) {
@@ -274,7 +274,7 @@ void test_opencl_deprecated() {
     auto cond = (strcmp("clBuildProgram: CL_BUILD_PROGRAM_FAILURE",
                         exc.what()) == 0);
       CAF_CHECK(cond);
-      if (!cond) {
+      if (! cond) {
         CAF_TEST_INFO("Wrong exception cought for program build failure.");
       }
   }

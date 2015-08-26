@@ -52,13 +52,11 @@ public:
   static program create(const char* kernel_source,
                         const char* options, const device& dev);
 private:
-  program(context_ptr context, command_queue_ptr queue, program_ptr program,
-          std::map<std::string,kernel_ptr> available_kernels);
+  program(context_ptr context, command_queue_ptr queue, program_ptr program);
 
   context_ptr context_;
   program_ptr program_;
   command_queue_ptr queue_;
-  std::map<std::string,kernel_ptr> available_kernels_;
   // save CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE
 };
 

@@ -194,7 +194,7 @@ void check_vector_results(const std::string& description,
                           const std::vector<T>& result) {
   auto cond = (expected == result);
   CAF_CHECK(cond);
-  if (!cond) {
+  if (! cond) {
     CAF_TEST_INFO(description << " failed.");
     std::cout << "Expected: " << std::endl;
     for (size_t i = 0; i < expected.size(); ++i) {
@@ -209,7 +209,6 @@ void check_vector_results(const std::string& description,
 }
 
 void test_opencl() {
-  auto minf = metainfo::instance();
   scoped_actor self;
   const ivec expected1{ 56,  62,  68,  74,
                        152, 174, 196, 218,
@@ -295,7 +294,7 @@ void test_opencl() {
     auto cond = (strcmp("clBuildProgram: CL_BUILD_PROGRAM_FAILURE",
                         exc.what()) == 0);
       CAF_CHECK(cond);
-      if (!cond) {
+      if (! cond) {
         CAF_TEST_INFO("Wrong exception cought for program build failure.");
       }
   }
@@ -318,8 +317,10 @@ void test_opencl() {
 
   auto get_max_workgroup_size = [](size_t dev_id, size_t dims) -> size_t  {
     size_t max_size = 512;
-    auto device = metainfo::instance()->get_devices()[dev_id];
-    size_t dimsize = device.get_max_work_item_sizes()[dims];
+    auto device = metainfo::instance()->get_device(dev_id);
+    if (! device)
+      return max_size;
+    size_t dimsize = (*device).get_max_work_item_sizes()[dims];
     return max_size < dimsize ? max_size : dimsize;
   };
 

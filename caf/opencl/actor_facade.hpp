@@ -113,14 +113,14 @@ public:
     };
     check_vec(config.offsets(), "offsets");
     check_vec(config.local_dimensions(), "local dimensions");
-    auto itr = prog.available_kernels_.find(kernel_name);
-    if (itr == prog.available_kernels_.end()) {
+    cl_int err = 0;
+    kernel_ptr kernel;
+    kernel.reset(clCreateKernel(prog.program_.get(), kernel_name, &err), false);
+    if (err != CL_SUCCESS)
       return nullptr;
-    } else {
-      return new actor_facade(prog, itr->second, config,
-                              std::move(map_args), std::move(map_result),
-                              std::forward_as_tuple(xs...));
-    }
+    return new actor_facade(prog, kernel, config,
+                            std::move(map_args), std::move(map_result),
+                            std::forward_as_tuple(xs...));
   }
 
   void enqueue(const actor_addr &sender, message_id mid, message content,
@@ -231,7 +231,7 @@ public:
              sizeof(cl_mem), static_cast<void*>(&output_buffers.back()));
     sizes.push_back(size);
   }
-  
+
   template <long I, class T>
   void create_buffer(const out<T>& wrapper, evnt_vec&, size_vec& sizes,
                      args_vec&, args_vec& output_buffers, message& msg) {
