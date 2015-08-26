@@ -66,7 +66,8 @@ void metainfo::initialize() {
   unsigned current_device_id = 0;
   for (auto& id : platform_ids) {
     platforms_.push_back(platform::create(id, current_device_id));
-    current_device_id += platforms_.back().get_devices().size();
+    current_device_id +=
+      static_cast<unsigned>(platforms_.back().get_devices().size());
   }
 }
 

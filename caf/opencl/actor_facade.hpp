@@ -136,14 +136,14 @@ public:
     if (! content.match_elements(input_types{})) {
       return;
     }
-    response_promise handle{this->address(), sender, mid.response_id()};
+    response_promise hdl{this->address(), sender, mid.response_id()};
     evnt_vec events;
     args_vec input_buffers;
     args_vec output_buffers;
     size_vec result_sizes;
     add_kernel_arguments(events, input_buffers, output_buffers,
                          result_sizes, content, indices);
-    auto cmd = make_counted<command_type>(handle, this,
+    auto cmd = make_counted<command_type>(hdl, this,
                                           std::move(events),
                                           std::move(input_buffers),
                                           std::move(output_buffers),

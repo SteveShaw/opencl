@@ -52,7 +52,7 @@ public:
   static program create(const char* kernel_source,
                         const char* options, const device& dev);
 private:
-  program(context_ptr context, command_queue_ptr queue, program_ptr program);
+  program(context_ptr context, command_queue_ptr queue, program_ptr prog);
 
   context_ptr context_;
   program_ptr program_;
