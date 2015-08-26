@@ -53,7 +53,7 @@ public:
   /// Returns device info on CL_DEVICE_LOCAL_MEM_SIZE
   inline cl_ulong get_local_mem_size() const;
   /// Returns device info on CL_DEVICE_LOCAL_MEM_TYPE
-  inline cl_uint get_local_mem_type() const;
+  inline cl_ulong get_local_mem_type() const;
   /// Returns device info on CL_DEVICE_MAX_CLOCK_FREQUENCY
   inline cl_uint get_max_clock_frequency() const;
   /// Returns device info on CL_DEVICE_MAX_COMPUTE_UNITS
@@ -166,7 +166,7 @@ inline cl_ulong device::get_local_mem_size() const {
   return local_mem_size_;
 }
 
-inline cl_uint device::get_local_mem_type() const {
+inline cl_ulong device::get_local_mem_type() const {
   return local_mem_size_;
 }
 

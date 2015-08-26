@@ -52,7 +52,8 @@ platform platform::create(cl_platform_id platform_id,
   auto lift = [](cl_device_id ptr) { return device_ptr{ptr, false}; };
   transform(ids.begin(), ids.end(), devices.begin(), lift);
   context_ptr context;
-  context.reset(v2get(CAF_CLF(clCreateContext), nullptr, ids.size(),
+  context.reset(v2get(CAF_CLF(clCreateContext), nullptr,
+                      static_cast<unsigned>(ids.size()),
                       ids.data(), pfn_notify, nullptr),
                 false);
   vector<device> device_information;

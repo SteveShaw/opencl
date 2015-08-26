@@ -206,7 +206,7 @@ public:
     mem_ptr tmp;
     tmp.reset(buffer, false);
     input_buffers.push_back(tmp);
-    v1callcl(CAF_CLF(clSetKernelArg), kernel_.get(), I,
+    v1callcl(CAF_CLF(clSetKernelArg), kernel_.get(), static_cast<unsigned>(I),
              sizeof(cl_mem), static_cast<void*>(&input_buffers.back()));
   }
 
@@ -227,7 +227,7 @@ public:
     mem_ptr tmp;
     tmp.reset(buffer, false);
     output_buffers.push_back(tmp);
-    v1callcl(CAF_CLF(clSetKernelArg), kernel_.get(), I,
+    v1callcl(CAF_CLF(clSetKernelArg), kernel_.get(), static_cast<unsigned>(I),
              sizeof(cl_mem), static_cast<void*>(&output_buffers.back()));
     sizes.push_back(size);
   }
@@ -244,7 +244,7 @@ public:
     mem_ptr tmp;
     tmp.reset(buffer, false);
     output_buffers.push_back(tmp);
-    v1callcl(CAF_CLF(clSetKernelArg), kernel_.get(), I,
+    v1callcl(CAF_CLF(clSetKernelArg), kernel_.get(), static_cast<unsigned>(I),
              sizeof(cl_mem), static_cast<void*>(&output_buffers.back()));
     sizes.push_back(size);
   }

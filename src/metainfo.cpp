@@ -63,7 +63,7 @@ void metainfo::initialize() {
   if (platform_ids.empty())
     throw std::runtime_error("no OpenCL platform found");
   // initialize platforms (device discovery)
-  auto current_device_id = 0;
+  unsigned current_device_id = 0;
   for (auto& id : platform_ids) {
     platforms_.push_back(platform::create(id, current_device_id));
     current_device_id += platforms_.back().get_devices().size();
