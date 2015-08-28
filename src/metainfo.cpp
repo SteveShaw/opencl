@@ -37,20 +37,17 @@ const std::vector<device>& metainfo::get_devices() const {
   return platforms_.front().get_devices();
 }
 
-const optional<const device&> metainfo::get_device(size_t id) {
+const optional<const device&> metainfo::get_device(size_t id) const{
   if (platforms_.empty())
     return none;
-  size_t i = 0;
-  platform& p = platforms_[0];
   size_t from = 0;
   size_t to = 0;
-  do {
+  for (auto& pl : platforms_) {
     from = to;
-    p = platforms_[i];
-    to += p.get_devices().size();
-  } while (id >= to && ++i < platforms_.size());
-  if (id < to)
-    return p.get_devices()[id - from];
+    to += pl.get_devices().size();
+    if (id >= from && id < to)
+      return pl.get_devices()[id - from];
+  }
   return none;
 }
 

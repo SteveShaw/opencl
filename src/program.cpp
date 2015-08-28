@@ -55,6 +55,7 @@ program program::create(const char* kernel_source, const char* options,
 program program::create(const char* kernel_source, const char* options,
                         const device& dev) {
   // create program object from kernel source
+  cout << "Using device: " << dev.get_name() << endl;
   size_t kernel_source_length = strlen(kernel_source);
   program_ptr pptr;
   auto rawptr = v2get(CAF_CLF(clCreateProgramWithSource), dev.context_.get(),

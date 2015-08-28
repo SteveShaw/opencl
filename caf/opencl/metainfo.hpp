@@ -48,14 +48,24 @@ class metainfo : public detail::abstract_singleton {
   friend command_queue_ptr get_command_queue(uint32_t id);
 
 public:
+  /// Get a list of all available devices. This is depricated, use the more specific
+  /// get_deivce and get_deivce_if functions.
+  /// (Returns only devices of the first discovered platform).
   const std::vector<device>& get_devices() const CAF_DEPRECATED;
-  const optional<const device&> get_device(size_t id = 0);
-//  optional<const device&> get_device_by_name(const std::string& name);
-//  optional<const device&> get_device_of_type(device_type type, size_t id = 0);
-//  optional<const device&> get_device_from_platform(const std::string& name, size_t id = 0);
-//  optional<const device&> get_device_of_type_from_platform(const std::string& name,
-//                                                 device_type type,
-//                                                 size_t id = 0);
+  /// Get the device with id. These ids are assigned sequientally to all available devices.
+  const optional<const device&> get_device(size_t id = 0) const;
+  /// Get the first device that satisfies the predicate.
+  /// The predicate should accept a `const device&` and return a bool;
+  template <class UnaryPredicate>
+  const optional<const device&> get_device_if(UnaryPredicate p) const {
+    for (auto& pl : platforms_) {
+      for (auto& dev : pl.get_devices()) {
+        if (p(dev))
+          return dev;
+      }
+    }
+    return none;
+  }
 
   /// Get metainfo instance.
   static metainfo* instance();
