@@ -326,7 +326,7 @@ void test_opencl() {
   });
   if (dev6) {
     // test for manuel return size selection (max workgroup size 1d)
-    const int max_wg_size = min(dev6->get_max_work_item_sizes()[0], 512UL);
+    const size_t max_wg_size = min(dev6->get_max_work_item_sizes()[0], 512UL);
     const size_t reduce_buffer_size = static_cast<size_t>(max_wg_size) * 8;
     const size_t reduce_local_size  = static_cast<size_t>(max_wg_size);
     const size_t reduce_work_groups = reduce_buffer_size / reduce_local_size;
@@ -345,9 +345,10 @@ void test_opencl() {
                        kernel_name_reduce, cfg6,
                        opencl::in<ivec>{}, opencl::out<ivec>{get_result_size_6});
     self->send(w6, move(arr6));
-    ivec expected4{max_wg_size * 7, max_wg_size * 6, max_wg_size * 5,
-                   max_wg_size * 4, max_wg_size * 3, max_wg_size * 2,
-                   max_wg_size    ,               0};
+    auto wg_size_as_int = static_cast<int>(max_wg_size);
+    ivec expected4{wg_size_as_int * 7, wg_size_as_int * 6, wg_size_as_int * 5,
+                   wg_size_as_int * 4, wg_size_as_int * 3, wg_size_as_int * 2,
+                   wg_size_as_int    ,               0};
     self->receive(
       [&](const ivec& result) {
         check_vector_results("Passing size for the output", expected4, result);

@@ -53,7 +53,7 @@ struct function_sig_from_outputs;
 
 template <class... Ts>
 struct function_sig_from_outputs<detail::type_list<Ts...>> {
-  using type = std::function<message (Ts...)>;
+  using type = std::function<message (Ts&...)>;
 };
 
 template <class T, class List>

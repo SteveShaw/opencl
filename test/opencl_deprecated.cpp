@@ -215,7 +215,7 @@ void test_opencl_deprecated() {
       }
     );
   };
-  auto map_res = [](ivec result) -> message {
+  auto map_res = [](ivec& result) -> message {
     return make_message(matrix_type{std::move(result)});
   };
   auto w3 = spawn_cl<ivec (ivec)>(program::create(kernel_source),
