@@ -26,10 +26,10 @@
 #include <algorithm>
 #include <functional>
 
+#include "caf/logger.hpp"
 #include "caf/abstract_actor.hpp"
 #include "caf/response_promise.hpp"
 
-#include "caf/detail/logging.hpp"
 #include "caf/detail/scope_guard.hpp"
 
 #include "caf/opencl/global.hpp"
@@ -87,7 +87,8 @@ public:
       (mem_in_events_.empty() ? nullptr : mem_in_events_.data()), &event_k
     );
     if (err != CL_SUCCESS) {
-      CAF_LOGMF(CAF_ERROR, "clEnqueueNDRangeKernel: " << get_opencl_error(err));
+      CAF_LOG_ERROR("clEnqueueNDRangeKernel: "
+                    << CAF_ARG(get_opencl_error(err)));
       clReleaseEvent(event_k);
       this->deref();
       return;
@@ -104,7 +105,7 @@ public:
       err = clEnqueueMarker(queue_.get(), &marker);
 #endif
       if (err != CL_SUCCESS) {
-        CAF_LOGMF(CAF_ERROR, "clSetEventCallback: " << get_opencl_error(err));
+        CAF_LOG_ERROR("clSetEventCallback: " << CAF_ARG(get_opencl_error(err)));
         clReleaseEvent(marker);
         clReleaseEvent(event_k);
         this->deref(); // callback is not set
@@ -118,7 +119,7 @@ public:
                                },
                                this);
       if (err != CL_SUCCESS) {
-        CAF_LOGMF(CAF_ERROR, "clSetEventCallback: " << get_opencl_error(err));
+        CAF_LOG_ERROR("clSetEventCallback: " << CAF_ARG(get_opencl_error(err)));
         clReleaseEvent(marker);
         clReleaseEvent(event_k);
         this->deref(); // callback is not set
@@ -126,7 +127,7 @@ public:
       }
       err = clFlush(queue_.get());
       if (err != CL_SUCCESS) {
-        CAF_LOGMF(CAF_ERROR, "clFlush: " << get_opencl_error(err));
+        CAF_LOG_ERROR("clFlush: " << CAF_ARG(get_opencl_error(err)));
       }
       mem_out_events_.push_back(std::move(event_k));
       mem_out_events_.push_back(std::move(marker));

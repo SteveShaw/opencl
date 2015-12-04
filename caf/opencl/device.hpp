@@ -29,9 +29,11 @@ namespace caf {
 namespace opencl {
 
 class program;
+class metainfo;
 
 class device {
   friend class program;
+  friend class metainfo;
 
 public:
   /// Intialize a new device in a context using a sepcific device_id

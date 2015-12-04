@@ -36,28 +36,18 @@ class actor_facade;
 /// @brief A wrapper for OpenCL's cl_program.
 class program {
 
+  friend class metainfo;
   template <class... Ts>
   friend class actor_facade;
 
-public:
-  /// @brief Factory method, that creates a caf::opencl::program
-  ///        from a given @p kernel_source.
-  /// @returns A program object.
-  static program create(const char* kernel_source,
-                        const char* options = nullptr, uint32_t device_id = 0);
-
-  /// @brief Factory method, that creates a caf::opencl::program
-  ///        from a given @p kernel_source.
-  /// @returns A program object.
-  static program create(const char* kernel_source,
-                        const char* options, const device& dev);
 private:
-  program(context_ptr context, command_queue_ptr queue, program_ptr prog);
+  program(context_ptr context, command_queue_ptr queue, program_ptr prog,
+          std::map<std::string,kernel_ptr> available_kernels);
 
   context_ptr context_;
   program_ptr program_;
   command_queue_ptr queue_;
-  // save CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE
+  std::map<std::string,kernel_ptr> available_kernels_;
 };
 
 } // namespace opencl

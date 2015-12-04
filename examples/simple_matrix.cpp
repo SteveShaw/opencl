@@ -23,7 +23,7 @@
 #include <iostream>
 
 #include "caf/all.hpp"
-#include "caf/opencl/spawn_cl.hpp"
+#include "caf/opencl/all.hpp"
 
 using namespace std;
 using namespace caf;
@@ -93,9 +93,11 @@ void multiplier(event_based_actor* self) {
   //          - local dimensions (optional)
   // 4th to Nth arg: the kernel signature described by in/out/in_out classes
   //          that contain the argument type in their template, requires vectors
-  auto worker = spawn_cl(kernel_source, kernel_name,
-                         spawn_config{dim_vec{matrix_size, matrix_size}},
-                         in<fvec>{}, in<fvec>{}, out<fvec>{});
+  auto worker = self->system().opencl_manager().spawn(
+    kernel_source, kernel_name,
+    spawn_config{dim_vec{matrix_size, matrix_size}},
+    in<fvec>{}, in<fvec>{}, out<fvec>{}
+  );
   // send both matrices to the actor and wait for a result
   self->sync_send(worker, move(m1), move(m2)).then(
     [](const fvec& result) {
@@ -106,9 +108,11 @@ void multiplier(event_based_actor* self) {
 }
 
 int main() {
-  announce<fvec>("float_vector");
-  spawn(multiplier);
-  await_all_actors_done();
-  shutdown();
+  actor_system_config cfg;
+  cfg.load<opencl::metainfo>()
+     .add_message_type<fvec>("float_vector");
+  actor_system system{cfg};
+  system.spawn(multiplier);
+  system.await_all_actors_done();
   return 0;
 }

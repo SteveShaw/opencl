@@ -21,6 +21,6 @@
 #ifndef CAF_OPENCL_ALL_HPP
 #define CAF_OPENCL_ALL_HPP
 
-#include "caf/opencl/spawn_cl.hpp"
+#include "caf/opencl/metainfo.hpp"
 
 #endif // CAF_OPENCL_ALL_HPP

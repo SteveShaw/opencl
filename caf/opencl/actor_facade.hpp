@@ -28,7 +28,6 @@
 #include "caf/all.hpp"
 
 #include "caf/channel.hpp"
-#include "caf/to_string.hpp"
 #include "caf/intrusive_ptr.hpp"
 
 #include "caf/detail/int_list.hpp"
@@ -99,7 +98,7 @@ public:
                                             Ts&&... xs) {
     if (config.dimensions().empty()) {
       auto str = "OpenCL kernel needs at least 1 global dimension.";
-      CAF_LOGF_ERROR(str);
+      CAF_LOG_ERROR(str);
       throw std::runtime_error(str);
     }
     auto check_vec = [&](const dim_vec& vec, const char* name) {
@@ -107,20 +106,29 @@ public:
         std::ostringstream oss;
         oss << name << " vector is not empty, but "
             << "its size differs from global dimensions vector's size";
-        CAF_LOGF_ERROR(oss.str());
+        CAF_LOG_ERROR(CAF_ARG(oss.str()));
         throw std::runtime_error(oss.str());
       }
     };
     check_vec(config.offsets(), "offsets");
     check_vec(config.local_dimensions(), "local dimensions");
-    cl_int err = 0;
-    kernel_ptr kernel;
-    kernel.reset(clCreateKernel(prog.program_.get(), kernel_name, &err), false);
-    if (err != CL_SUCCESS)
-      return nullptr;
-    return new actor_facade(prog, kernel, config,
-                            std::move(map_args), std::move(map_result),
-                            std::forward_as_tuple(xs...));
+    auto itr = prog.available_kernels_.find(kernel_name);
+    caf::actor_config cfg;
+    if (itr == prog.available_kernels_.end()) {
+      cl_int err = 0;
+      kernel_ptr kernel;
+      kernel.reset(clCreateKernel(prog.program_.get(), kernel_name, &err),
+                                  false);
+      if (err != CL_SUCCESS)
+        return nullptr;
+      return new actor_facade(cfg, prog, kernel, config,
+                              std::move(map_args), std::move(map_result),
+                              std::forward_as_tuple(xs...));
+    } else {
+      return new actor_facade(cfg, prog, itr->second, config,
+                              std::move(map_args), std::move(map_result),
+                              std::forward_as_tuple(xs...));
+    }
   }
 
   void enqueue(const actor_addr &sender, message_id mid, message content,
@@ -152,11 +160,13 @@ public:
     cmd->enqueue();
   }
 
-  actor_facade(const program& prog, kernel_ptr kernel,
+  actor_facade(caf::actor_config& cfg, 
+               const program& prog, kernel_ptr kernel,
                const spawn_config& config,
                input_mapping map_args, output_mapping map_result,
                std::tuple<Ts...> xs)
-      : kernel_(kernel),
+      : abstract_actor(cfg),
+        kernel_(kernel),
         program_(prog.program_),
         context_(prog.context_),
         queue_(prog.queue_),
