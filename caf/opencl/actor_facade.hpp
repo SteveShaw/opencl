@@ -64,7 +64,7 @@ struct command_sig_from_outputs<T, detail::type_list<Ts...>> {
 };
 
 template <class... Ts>
-class actor_facade : public abstract_actor {
+class actor_facade : public monitorable_actor {
 public:
   using arg_types = detail::type_list<Ts...>;
   using unpacked_types = typename detail::tl_map<arg_types, extract_type>::type;
@@ -90,7 +90,8 @@ public:
   using command_type =
     typename command_sig_from_outputs<actor_facade, output_types>::type;
 
-  static intrusive_ptr<actor_facade> create(const program& prog,
+  static intrusive_ptr<actor_facade> create(actor_config& cfg,
+                                            const program& prog,
                                             const char* kernel_name,
                                             const spawn_config& config,
                                             input_mapping map_args,
@@ -113,7 +114,6 @@ public:
     check_vec(config.offsets(), "offsets");
     check_vec(config.local_dimensions(), "local dimensions");
     auto itr = prog.available_kernels_.find(kernel_name);
-    caf::actor_config cfg;
     if (itr == prog.available_kernels_.end()) {
       cl_int err = 0;
       kernel_ptr kernel;
@@ -144,14 +144,14 @@ public:
     if (! content.match_elements(input_types{})) {
       return;
     }
-    response_promise hdl{this->address(), sender, mid.response_id()};
+    auto hdl = std::make_tuple(this->address(), sender, mid.response_id());
     evnt_vec events;
     args_vec input_buffers;
     args_vec output_buffers;
     size_vec result_sizes;
     add_kernel_arguments(events, input_buffers, output_buffers,
                          result_sizes, content, indices);
-    auto cmd = make_counted<command_type>(hdl, this,
+    auto cmd = make_counted<command_type>(std::move(hdl), this,
                                           std::move(events),
                                           std::move(input_buffers),
                                           std::move(output_buffers),
@@ -160,12 +160,12 @@ public:
     cmd->enqueue();
   }
 
-  actor_facade(caf::actor_config& cfg, 
+  actor_facade(actor_config& cfg,
                const program& prog, kernel_ptr kernel,
                const spawn_config& config,
                input_mapping map_args, output_mapping map_result,
                std::tuple<Ts...> xs)
-      : abstract_actor(cfg),
+      : monitorable_actor(cfg),
         kernel_(kernel),
         program_(prog.program_),
         context_(prog.context_),

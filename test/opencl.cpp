@@ -343,7 +343,7 @@ void test_opencl(actor_system& sys) {
     int n = static_cast<int>(arr6.capacity());
     generate(arr6.begin(), arr6.end(), [&]{ return --n; });
     opencl::spawn_config cfg6{dims{reduce_global_size},
-                              dims{ /* no offsets */ },
+                              dims{                  }, // no offset
                               dims{reduce_local_size}};
     auto get_result_size_6 = [reduce_result_size](const ivec&) {
       return reduce_result_size;

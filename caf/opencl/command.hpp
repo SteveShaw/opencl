@@ -43,7 +43,8 @@ namespace opencl {
 template <class FacadeType, class... Ts>
 class command : public ref_counted {
 public:
-  command(response_promise handle, intrusive_ptr<FacadeType> actor_facade,
+  command(std::tuple<actor_addr,actor_addr,message_id> handle,
+          intrusive_ptr<FacadeType> actor_facade,
           std::vector<cl_event> events, std::vector<mem_ptr> input_buffers,
           std::vector<mem_ptr> output_buffers, std::vector<size_t> result_sizes,
           message msg)
@@ -136,7 +137,7 @@ public:
 
 private:
   std::vector<size_t> result_sizes_;
-  response_promise handle_;
+  std::tuple<actor_addr,actor_addr,message_id> handle_;
   intrusive_ptr<FacadeType> actor_facade_;
   command_queue_ptr queue_;
   std::vector<cl_event> mem_in_events_;
@@ -178,7 +179,8 @@ private:
                                     detail::get_indices(result_buffers_),
                                     result_buffers_)
                        : message_from_results{}(result_buffers_);
-    handle_.deliver(std::move(msg));
+    get<1>(handle_)->enqueue(get<0>(handle_), get<2>(handle_), std::move(msg),
+                             nullptr);
   }
 };
 

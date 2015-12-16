@@ -99,7 +99,7 @@ void multiplier(event_based_actor* self) {
     in<fvec>{}, in<fvec>{}, out<fvec>{}
   );
   // send both matrices to the actor and wait for a result
-  self->sync_send(worker, move(m1), move(m2)).then(
+  self->request(worker, move(m1), move(m2)).then(
     [](const fvec& result) {
       cout << "result: " << endl;
       print_as_matrix(result);

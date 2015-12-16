@@ -49,41 +49,22 @@ struct cl_spawn_helper {
   using map_in_fun = std::function<maybe<message> (message&)>;
   using map_out_fun = typename impl::output_mapping;
 
-  actor operator()(const opencl::program& p, const char* fn,
-                   const opencl::spawn_config& cfg, Ts&&... xs) const {
-    return actor_cast<actor>(impl::create(p, fn, cfg,
+  actor operator()(actor_config& actor_cfg,
+                   const opencl::program& p, const char* fn,
+                   const opencl::spawn_config& spawn_cfg, Ts&&... xs) const {
+    return actor_cast<actor>(impl::create(actor_cfg, p, fn, spawn_cfg,
                                           map_in_fun{}, map_out_fun{},
                                           std::move(xs)...));
   }
-  actor operator()(const opencl::program& p, const char* fn,
-                   const opencl::spawn_config& cfg,
+  actor operator()(actor_config& actor_cfg,
+                   const opencl::program& p, const char* fn,
+                   const opencl::spawn_config& spawn_cfg,
                    map_in_fun map_input, map_out_fun map_output,
                    Ts&&... xs) const {
-    return actor_cast<actor>(impl::create(p, fn, cfg, std::move(map_input),
+    return actor_cast<actor>(impl::create(actor_cfg, p, fn, spawn_cfg,
+                                          std::move(map_input),
                                           std::move(map_output),
                                           std::move(xs)...));
-  }
-  // used by the deprecated spawn_helper
-  template <class Tuple, long... Is>
-  actor operator()(tuple_construct,
-                   const opencl::program& p, const char* fn,
-                   const opencl::spawn_config& cfg,
-                   Tuple&& xs,
-                   detail::int_list<Is...>) const {
-    return actor_cast<actor>(impl::create(p, fn, cfg,
-                                          map_in_fun{}, map_out_fun{},
-                                          std::move(std::get<Is>(xs))...));
-  }
-  template <class Tuple, long... Is>
-  actor operator()(tuple_construct,
-                   const opencl::program& p, const char* fn,
-                   const opencl::spawn_config& cfg,
-                   map_in_fun map_input, map_out_fun map_output,
-                   Tuple&& xs,
-                   detail::int_list<Is...>) const {
-    return actor_cast<actor>(impl::create(p, fn, cfg,std::move(map_input),
-                                          std::move(map_output),
-                                          std::move(std::get<Is>(xs))...));
   }
 };
 
@@ -125,7 +106,7 @@ public:
 
   void* subtype_ptr() override;
 
-  static actor_system::module* make(actor_system&, detail::type_list<>);
+  static actor_system::module* make(actor_system& sys, detail::type_list<>);
 
   // OpenCL functionality
 
@@ -156,7 +137,8 @@ public:
         T x,
         Ts... xs) {
     detail::cl_spawn_helper<T, Ts...> f;
-    return f(prog, fname, config, std::move(x), std::move(xs)...);
+    actor_config cfg{system_.dummy_execution_unit()};
+    return f(cfg, prog, fname, config, std::move(x), std::move(xs)...);
   }
 
   /// Compiles `source` and creates a new actor facade for an OpenCL kernel
@@ -175,7 +157,8 @@ public:
         T x,
         Ts... xs) {
     detail::cl_spawn_helper<T, Ts...> f;
-    return f(create_program(source), fname, config,
+    actor_config cfg{system_.dummy_execution_unit()};
+    return f(cfg, create_program(source), fname, config,
              std::move(x), std::move(xs)...);
   }
 
@@ -191,7 +174,8 @@ public:
               Fun map_result,
               Ts... xs) {
     detail::cl_spawn_helper<Ts...> f;
-    return f(prog, fname, config, std::move(map_args), std::move(map_result),
+    actor_config cfg{system_.dummy_execution_unit()};
+    return f(cfg, prog, fname, config, std::move(map_args), std::move(map_result),
              std::forward<Ts>(xs)...);
   }
 
@@ -208,7 +192,8 @@ public:
               Fun map_result,
               Ts... xs) {
     detail::cl_spawn_helper<Ts...> f;
-    return f(create_program(source), fname, config,
+    actor_config cfg{system_.dummy_execution_unit()};
+    return f(cfg, create_program(source), fname, config,
              std::move(map_args), std::move(map_result),
              std::forward<Ts>(xs)...);
   }
