@@ -16,7 +16,7 @@ using namespace std;
 using namespace caf;
 using namespace caf::opencl;
 
-using detail::limited_vector;
+using caf::detail::limited_vector;
 
 namespace {
 
@@ -410,7 +410,7 @@ void test_opencl(actor_system& sys) {
 
 CAF_TEST(test_opencl) {
   actor_system_config cfg;
-  cfg.load<opencl::metainfo>()
+  cfg.load<opencl::manager>()
     .add_message_type<ivec>("int_vector")
     .add_message_type<matrix_type>("square_matrix");
   actor_system system{cfg};

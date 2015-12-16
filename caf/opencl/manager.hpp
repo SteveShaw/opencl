@@ -17,15 +17,14 @@
  * http://www.boost.org/LICENSE_1_0.txt.                                      *
  ******************************************************************************/
 
-#ifndef CAF_METAINFO_HPP
-#define CAF_METAINFO_HPP
+#ifndef CAF_OPENCL_MANAGER_HPP
+#define CAF_OPENCL_MANAGER_HPP
 
 #include <atomic>
 #include <vector>
 #include <algorithm>
 #include <functional>
 
-#include "caf/all.hpp"
 #include "caf/maybe.hpp"
 #include "caf/config.hpp"
 #include "caf/actor_system.hpp"
@@ -37,53 +36,19 @@
 #include "caf/opencl/smart_ptr.hpp"
 #include "caf/opencl/actor_facade.hpp"
 
+#include "caf/opencl/detail/spawn_helper.hpp"
+
 namespace caf {
-
-namespace detail {
-
-struct tuple_construct { };
-
-template <class... Ts>
-struct cl_spawn_helper {
-  using impl = opencl::actor_facade<Ts...>;
-  using map_in_fun = std::function<maybe<message> (message&)>;
-  using map_out_fun = typename impl::output_mapping;
-
-  actor operator()(actor_config& actor_cfg,
-                   const opencl::program& p, const char* fn,
-                   const opencl::spawn_config& spawn_cfg, Ts&&... xs) const {
-    return actor_cast<actor>(impl::create(actor_cfg, p, fn, spawn_cfg,
-                                          map_in_fun{}, map_out_fun{},
-                                          std::move(xs)...));
-  }
-  actor operator()(actor_config& actor_cfg,
-                   const opencl::program& p, const char* fn,
-                   const opencl::spawn_config& spawn_cfg,
-                   map_in_fun map_input, map_out_fun map_output,
-                   Ts&&... xs) const {
-    return actor_cast<actor>(impl::create(actor_cfg, p, fn, spawn_cfg,
-                                          std::move(map_input),
-                                          std::move(map_output),
-                                          std::move(xs)...));
-  }
-};
-
-} // namespace detail
-
 namespace opencl {
 
-class metainfo : public actor_system::module {
-
+class manager : public actor_system::module {
+public:
   friend class program;
   friend class actor_system;
   friend command_queue_ptr get_command_queue(uint32_t id);
-
-public:
-  /// Get a list of all available devices. This is depricated, use the more specific
-  /// get_deivce and get_deivce_if functions.
-  /// (Returns only devices of the first discovered platform).
-  const std::vector<device>& get_devices() const CAF_DEPRECATED;
-  /// Get the device with id. These ids are assigned sequientally to all available devices.
+  manager(const manager&) = delete;
+  manager& operator=(const manager&) = delete;
+  /// Get the device with id, which is assigned sequientally.
   const maybe<const device&> get_device(size_t id = 0) const;
   /// Get the first device that satisfies the predicate.
   /// The predicate should accept a `const device&` and return a bool;
@@ -106,7 +71,8 @@ public:
 
   void* subtype_ptr() override;
 
-  static actor_system::module* make(actor_system& sys, detail::type_list<>);
+  static actor_system::module* make(actor_system& sys,
+                                    caf::detail::type_list<>);
 
   // OpenCL functionality
 
@@ -137,8 +103,8 @@ public:
         T x,
         Ts... xs) {
     detail::cl_spawn_helper<T, Ts...> f;
-    actor_config cfg{system_.dummy_execution_unit()};
-    return f(cfg, prog, fname, config, std::move(x), std::move(xs)...);
+    return f(actor_config{system_.dummy_execution_unit()}, prog, fname, config,
+             std::move(x), std::move(xs)...);
   }
 
   /// Compiles `source` and creates a new actor facade for an OpenCL kernel
@@ -157,8 +123,8 @@ public:
         T x,
         Ts... xs) {
     detail::cl_spawn_helper<T, Ts...> f;
-    actor_config cfg{system_.dummy_execution_unit()};
-    return f(cfg, create_program(source), fname, config,
+    return f(actor_config{system_.dummy_execution_unit()},
+             create_program(source), fname, config,
              std::move(x), std::move(xs)...);
   }
 
@@ -174,8 +140,8 @@ public:
               Fun map_result,
               Ts... xs) {
     detail::cl_spawn_helper<Ts...> f;
-    actor_config cfg{system_.dummy_execution_unit()};
-    return f(cfg, prog, fname, config, std::move(map_args), std::move(map_result),
+    return f(actor_config{system_.dummy_execution_unit()}, prog, fname, config,
+             std::move(map_args), std::move(map_result),
              std::forward<Ts>(xs)...);
   }
 
@@ -192,14 +158,15 @@ public:
               Fun map_result,
               Ts... xs) {
     detail::cl_spawn_helper<Ts...> f;
-    actor_config cfg{system_.dummy_execution_unit()};
-    return f(cfg, create_program(source), fname, config,
+    return f(actor_config{system_.dummy_execution_unit()},
+             create_program(source), fname, config,
              std::move(map_args), std::move(map_result),
              std::forward<Ts>(xs)...);
   }
 
 protected:
-  metainfo(actor_system& sys);
+  manager(actor_system& sys);
+  ~manager();
 
 private:
   actor_system& system_;
@@ -209,4 +176,4 @@ private:
 } // namespace opencl
 } // namespace caf
 
-#endif // CAF_METAINFO_HPP
+#endif // CAF_OPENCL_MANAGER_HPP

@@ -18,8 +18,10 @@
  * http://www.boost.org/LICENSE_1_0.txt.                                      *
  ******************************************************************************/
 
+#include "caf/detail/type_list.hpp"
+
 #include "caf/opencl/device.hpp"
-#include "caf/opencl/metainfo.hpp"
+#include "caf/opencl/manager.hpp"
 #include "caf/opencl/platform.hpp"
 #include "caf/opencl/opencl_err.hpp"
 
@@ -28,18 +30,7 @@ using namespace std;
 namespace caf {
 namespace opencl {
 
-//metainfo* metainfo::instance() {
-//  auto sid = detail::singletons::opencl_plugin_id;
-//  auto fac = [] { return new metainfo; };
-//  auto res = detail::singletons::get_plugin_singleton(sid, fac);
-//  return static_cast<metainfo*>(res);
-//}
-
-const std::vector<device>& metainfo::get_devices() const {
-  return platforms_.front().get_devices();
-}
-
-const maybe<const device&> metainfo::get_device(size_t id) const{
+const maybe<const device&> manager::get_device(size_t id) const {
   if (platforms_.empty())
     return none;
   size_t to = 0;
@@ -52,7 +43,7 @@ const maybe<const device&> metainfo::get_device(size_t id) const{
   return none;
 }
 
-void metainfo::init(actor_system_config&) {
+void manager::init(actor_system_config&) {
   // get number of available platforms
   auto num_platforms = v1get<cl_uint>(CAF_CLF(clGetPlatformIDs));
   // get platform ids
@@ -69,27 +60,28 @@ void metainfo::init(actor_system_config&) {
   }
 }
 
-void metainfo::start() {
+void manager::start() {
   // nop
 }
 
-void metainfo::stop() {
+void manager::stop() {
   // nop
 }
 
-actor_system::module::id_t metainfo::id() const {
+actor_system::module::id_t manager::id() const {
   return actor_system::module::opencl_manager;
 }
 
-void* metainfo::subtype_ptr() {
+void* manager::subtype_ptr() {
   return this;
 }
 
-actor_system::module* metainfo::make(actor_system& sys, detail::type_list<>) {
-  return new metainfo{sys};
+actor_system::module* manager::make(actor_system& sys,
+                                    caf::detail::type_list<>) {
+  return new manager{sys};
 }
 
-program metainfo::create_program(const char* kernel_source, const char* options,
+program manager::create_program(const char* kernel_source, const char* options,
                                  uint32_t device_id) {
   auto dev = get_device(device_id);
   if (! dev) {
@@ -101,7 +93,7 @@ program metainfo::create_program(const char* kernel_source, const char* options,
   return create_program(kernel_source, options, *dev);
 }
 
-program metainfo::create_program(const char* kernel_source, const char* options,
+program manager::create_program(const char* kernel_source, const char* options,
                                  const device& dev) {
   // create program object from kernel source
   size_t kernel_source_length = strlen(kernel_source);
@@ -116,7 +108,7 @@ program metainfo::create_program(const char* kernel_source, const char* options,
   if (err != CL_SUCCESS) {
     ostringstream oss;
     oss << "clBuildProgram: " << get_opencl_error(err);
-// the build log will be printed by the pfn_notify (see metainfo.cpp)
+// the build log will be printed by the pfn_notify (see opencl/manger.cpp)
 #ifndef __APPLE__
     // seems that just apple implemented the
     // pfn_notify callback, but we can get
@@ -154,7 +146,7 @@ program metainfo::create_program(const char* kernel_source, const char* options,
       clGetKernelInfo(kernels[i], CL_KERNEL_FUNCTION_NAME, 0, nullptr, &ret_size);
       vector<char> name(ret_size);
       err = clGetKernelInfo(kernels[i], CL_KERNEL_FUNCTION_NAME, ret_size,
-                            (void*) name.data(), nullptr);
+                            reinterpret_cast<void*>(name.data()), nullptr);
       if (err != CL_SUCCESS) {
         ostringstream oss;
         oss << "clGetKernelInfo (CL_KERNEL_FUNCTION_NAME): "
@@ -169,7 +161,11 @@ program metainfo::create_program(const char* kernel_source, const char* options,
   return {dev.context_, dev.command_queue_, pptr, move(available_kernels)};
 }
 
-metainfo::metainfo(actor_system& sys) : system_(sys){
+manager::manager(actor_system& sys) : system_(sys){
+  // nop
+}
+
+manager::~manager() {
   // nop
 }
 

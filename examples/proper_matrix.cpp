@@ -32,7 +32,7 @@ using namespace std;
 using namespace caf;
 using namespace caf::opencl;
 
-using detail::limited_vector;
+using caf::detail::limited_vector;
 
 namespace {
 
@@ -195,7 +195,7 @@ int main() {
   // matrix_type ist not a simple type,
   // it must be annouced to libcaf
   actor_system_config cfg;
-  cfg.load<opencl::metainfo>()
+  cfg.load<opencl::manager>()
     .add_message_type<fvec>("float_vector")
     .add_message_type<matrix_type>("square_matrix");
   actor_system system{cfg};

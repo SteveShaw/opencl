@@ -29,13 +29,13 @@ namespace caf {
 namespace opencl {
 
 class program;
-class metainfo;
+class manager;
 
 class device {
-  friend class program;
-  friend class metainfo;
-
 public:
+  friend class program;
+  friend class manager;
+
   /// Intialize a new device in a context using a sepcific device_id
   static device create(context_ptr context, device_ptr device_id, unsigned id);
   /// Get the id assigned by caf

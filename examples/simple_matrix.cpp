@@ -29,7 +29,7 @@ using namespace std;
 using namespace caf;
 using namespace caf::opencl;
 
-using detail::limited_vector;
+using caf::detail::limited_vector;
 
 namespace {
 
@@ -109,7 +109,7 @@ void multiplier(event_based_actor* self) {
 
 int main() {
   actor_system_config cfg;
-  cfg.load<opencl::metainfo>()
+  cfg.load<opencl::manager>()
      .add_message_type<fvec>("float_vector");
   actor_system system{cfg};
   system.spawn(multiplier);

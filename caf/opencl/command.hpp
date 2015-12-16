@@ -80,10 +80,10 @@ public:
     // OpenCL expects cl_uint (unsigned int), hence the cast
     cl_int err = clEnqueueNDRangeKernel(
       queue_.get(), actor_facade_->kernel_.get(),
-      static_cast<cl_uint>(actor_facade_->config_.dimensions().size()),
-      data_or_nullptr(actor_facade_->config_.offsets()),
-      data_or_nullptr(actor_facade_->config_.dimensions()),
-      data_or_nullptr(actor_facade_->config_.local_dimensions()),
+      static_cast<cl_uint>(actor_facade_->spawn_cfg_.dimensions().size()),
+      data_or_nullptr(actor_facade_->spawn_cfg_.offsets()),
+      data_or_nullptr(actor_facade_->spawn_cfg_.dimensions()),
+      data_or_nullptr(actor_facade_->spawn_cfg_.local_dimensions()),
       static_cast<cl_uint>(mem_in_events_.size()),
       (mem_in_events_.empty() ? nullptr : mem_in_events_.data()), &event_k
     );

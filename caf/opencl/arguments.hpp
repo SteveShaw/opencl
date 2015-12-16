@@ -67,7 +67,7 @@ struct out {
     };
   }
   maybe<size_t> operator()(message& msg) const {
-    return fun_ ? fun_(msg) : 0;
+    return fun_ ? fun_(msg) : 0UL;
   }
   std::function<maybe<size_t> (message&)> fun_;
 };
