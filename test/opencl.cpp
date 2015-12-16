@@ -217,7 +217,7 @@ void check_vector_results(const string& description,
 }
 
 void test_opencl(actor_system& sys) {
-  auto mngr = sys.opencl_manager();
+  auto& mngr = sys.opencl_manager();
   auto opt = mngr.get_device_if([](const device&){ return true; });
   if (! opt)
     CAF_TEST_ERROR("No OpenCL device found.");

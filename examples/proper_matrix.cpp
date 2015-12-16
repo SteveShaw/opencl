@@ -140,7 +140,7 @@ inline bool operator!=(const square_matrix<Size>& lhs,
 using matrix_type = square_matrix<matrix_size>;
 
 void multiplier(event_based_actor* self) {
-  auto mngr = self->system().opencl_manager();
+  auto& mngr = self->system().opencl_manager();
 
   // create two matrices with ascending values
   matrix_type m1;
