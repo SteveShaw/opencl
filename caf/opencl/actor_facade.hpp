@@ -133,6 +133,7 @@ public:
 
   void enqueue(const actor_addr &sender, message_id mid, message content,
                execution_unit*) override {
+    CAF_PUSH_AID(id());
     CAF_LOG_TRACE("");
     if (map_args_) {
       auto mapped = map_args_(content);
@@ -158,6 +159,12 @@ public:
                                           std::move(result_sizes),
                                           std::move(content));
     cmd->enqueue();
+  }
+
+  void enqueue(mailbox_element_ptr ptr, execution_unit* eu) override {
+    CAF_ASSERT(ptr != nullptr);
+    CAF_LOG_TRACE(CAF_ARG(*ptr));
+    enqueue(ptr->sender, ptr->mid, ptr->msg, eu);
   }
 
   actor_facade(actor_config actor_cfg,
