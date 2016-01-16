@@ -181,7 +181,7 @@ public:
         map_args_(std::move(map_args)),
         map_results_(std::move(map_result)),
         argument_types_(xs) {
-    CAF_LOG_TRACE("id: " << this->id());
+    CAF_LOG_TRACE(CAF_ARG(this->id()));
     default_output_size_ = std::accumulate(spawn_cfg_.dimensions().begin(),
                                            spawn_cfg_.dimensions().end(),
                                            size_t{1},
