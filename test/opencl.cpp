@@ -203,7 +203,7 @@ void check_vector_results(const string& description,
   auto cond = (expected == result);
   CAF_CHECK(cond);
   if (! cond) {
-    CAF_TEST_INFO(description << " failed.");
+    CAF_ERROR(description << " failed.");
     cout << "Expected: " << endl;
     for (size_t i = 0; i < expected.size(); ++i) {
       cout << " " << expected[i];
@@ -220,7 +220,7 @@ void test_opencl(actor_system& sys) {
   auto& mngr = sys.opencl_manager();
   auto opt = mngr.get_device_if([](const device&){ return true; });
   if (! opt)
-    CAF_TEST_ERROR("No OpenCL device found.");
+    CAF_ERROR("No OpenCL device found.");
   auto dev = *opt;
   scoped_actor self{sys};
   const ivec expected1{ 56,  62,  68,  74,
@@ -238,8 +238,7 @@ void test_opencl(actor_system& sys) {
                            expected1, result);
     },
     others >> [&] {
-      CAF_TEST_ERROR("Unexpected message "
-                     << to_string(self->current_message()));
+      CAF_ERROR("Unexpected message " << to_string(self->current_message()));
     }
   );
   opencl::spawn_config cfg2{dims{matrix_size, matrix_size}};
@@ -252,8 +251,7 @@ void test_opencl(actor_system& sys) {
                            expected1, result);
     },
     others >> [&] {
-      CAF_TEST_ERROR("Unexpected message "
-                     << to_string(self->current_message()));
+      CAF_ERROR("Unexpected message " << to_string(self->current_message()));
     }
   );
   const matrix_type expected2(move(expected1));
@@ -279,8 +277,7 @@ void test_opencl(actor_system& sys) {
                            expected2.data(), result.data());
     },
     others >> [&] {
-      CAF_TEST_ERROR("Unexpected message "
-                     << to_string(self->current_message()));
+      CAF_ERROR("Unexpected message " << to_string(self->current_message()));
     }
   );
   opencl::spawn_config cfg4{dims{matrix_size, matrix_size}};
@@ -294,12 +291,11 @@ void test_opencl(actor_system& sys) {
                            expected2.data(), result.data());
     },
     others >> [&] {
-      CAF_TEST_ERROR("Unexpected message "
-                     << to_string(self->current_message()));
+      CAF_ERROR("Unexpected message " << to_string(self->current_message()));
     }
   );
-  CAF_TEST_INFO("Expecting exception (compiling invalid kernel, "
-                "semicolon is missing).");
+  CAF_MESSAGE("Expecting exception (compiling invalid kernel, "
+              "semicolon is missing).");
   try {
     auto create_error = mngr.create_program(kernel_source_error);
   }
@@ -308,7 +304,7 @@ void test_opencl(actor_system& sys) {
                         exc.what()) == 0);
       CAF_CHECK(cond);
       if (! cond) {
-        CAF_TEST_INFO("Wrong exception cought for program build failure.");
+        CAF_ERROR("Wrong exception cought for program build failure.");
       }
   }
   // test for opencl compiler flags
@@ -323,8 +319,7 @@ void test_opencl(actor_system& sys) {
       check_vector_results("Passing compiler flags", expected3, result);
     },
     others >> [&] {
-      CAF_TEST_ERROR("Unexpected message "
-                     << to_string(self->current_message()));
+      CAF_ERROR("Unexpected message " << to_string(self->current_message()));
     }
   );
 
@@ -361,8 +356,7 @@ void test_opencl(actor_system& sys) {
         check_vector_results("Passing size for the output", expected4, result);
       },
       others >> [&] {
-        CAF_TEST_ERROR("Unexpected message "
-                       << to_string(self->current_message()));
+        CAF_ERROR("Unexpected message " << to_string(self->current_message()));
       }
     );
   }
@@ -384,8 +378,7 @@ void test_opencl(actor_system& sys) {
       check_vector_results("Using const input argument", expected5, result);
     },
     others >> [&] {
-      CAF_TEST_ERROR("Unexpected message "
-                     << to_string(self->current_message()));
+      CAF_ERROR("Unexpected message " << to_string(self->current_message()));
     }
   );
   // test in_out argument type
@@ -402,8 +395,7 @@ void test_opencl(actor_system& sys) {
       check_vector_results("Testing in_out arugment", expected9, result);
     },
     others >> [&] {
-      CAF_TEST_ERROR("Unexpected message "
-                     << to_string(self->current_message()));
+      CAF_ERROR("Unexpected message " << to_string(self->current_message()));
     }
   );
 }
