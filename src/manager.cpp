@@ -124,8 +124,10 @@ program manager::create_program(const char* kernel_source, const char* options,
       clGetProgramBuildInfo(pptr.get(), dev_tmp, CL_PROGRAM_BUILD_LOG,
                             sizeof(buffer[0]) * buildlog_buffer_size,
                             buffer.data(), nullptr);
-      CAF_LOGF_ERROR("Build log:\n" + string(buffer.data()) +
-                     "\n########################################");
+      ostringstream ss;
+      ss << "Build log:\n" << string(buffer.data())
+         << "\n#######################################";
+      CAF_LOG_ERROR(CAF_ARG(ss.str()));
     }
 #endif
     throw runtime_error(oss.str());
