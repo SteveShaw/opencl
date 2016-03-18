@@ -184,7 +184,7 @@ void multiplier(event_based_actor* self) {
 
   // send both matrices to the actor and
   // wait for results in form of a matrix_type
-  self->request(worker, move(m1), move(m2)).then(
+  self->request(worker, chrono::seconds(5), move(m1), move(m2)).then(
     [](const matrix_type& result) {
       cout << "result:" << endl << to_string(result);
     }
