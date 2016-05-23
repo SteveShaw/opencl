@@ -27,7 +27,6 @@
 
 #include "caf/all.hpp"
 
-#include "caf/channel.hpp"
 #include "caf/intrusive_ptr.hpp"
 
 #include "caf/detail/int_list.hpp"
@@ -73,7 +72,7 @@ public:
     typename detail::tl_filter<arg_types, is_input_arg>::type;
   using input_types =
     typename detail::tl_map<input_wrapped_types, extract_type>::type;
-  using input_mapping = std::function<maybe<message> (message&)>;
+  using input_mapping = std::function<optional<message> (message&)>;
 
   using output_wrapped_types =
     typename detail::tl_filter<arg_types, is_output_arg>::type;
@@ -90,13 +89,15 @@ public:
   using command_type =
     typename command_sig_from_outputs<actor_facade, output_types>::type;
 
-  static intrusive_ptr<actor_facade> create(actor_config actor_cfg,
-                                            const program& prog,
-                                            const char* kernel_name,
-                                            const spawn_config& spawn_cfg,
-                                            input_mapping map_args,
-                                            output_mapping map_result,
-                                            Ts&&... xs) {
+  const char* name() const override {
+    return "OpenCL actor";
+  }
+
+
+  static actor create(actor_config actor_cfg, const program& prog,
+                      const char* kernel_name, const spawn_config& spawn_cfg,
+                      input_mapping map_args, output_mapping map_result,
+                      Ts&&... xs) {
     if (spawn_cfg.dimensions().empty()) {
       auto str = "OpenCL kernel needs at least 1 global dimension.";
       CAF_LOG_ERROR(str);
@@ -113,25 +114,30 @@ public:
     };
     check_vec(spawn_cfg.offsets(), "offsets");
     check_vec(spawn_cfg.local_dimensions(), "local dimensions");
+    auto& sys = actor_cfg.host->system();
     auto itr = prog.available_kernels_.find(kernel_name);
     if (itr == prog.available_kernels_.end()) {
-      cl_int err = 0;
       kernel_ptr kernel;
-      kernel.reset(clCreateKernel(prog.program_.get(), kernel_name, &err),
-                                  false);
-      if (err != CL_SUCCESS)
-        return nullptr;
-      return new actor_facade(std::move(actor_cfg), prog, kernel, spawn_cfg,
-                              std::move(map_args), std::move(map_result),
-                              std::forward_as_tuple(xs...));
+      kernel.reset(v2get(CAF_CLF(clCreateKernel), prog.program_.get(),
+                                 kernel_name),
+                   false);
+      return make_actor<actor_facade, actor>(sys.next_actor_id(), sys.node(),
+                                             &sys, std::move(actor_cfg),
+                                             prog, kernel, spawn_cfg,
+                                             std::move(map_args),
+                                             std::move(map_result),
+                                             std::forward_as_tuple(xs...));
     } else {
-      return new actor_facade(std::move(actor_cfg), prog, itr->second, spawn_cfg,
-                              std::move(map_args), std::move(map_result),
-                              std::forward_as_tuple(xs...));
+      return make_actor<actor_facade, actor>(sys.next_actor_id(), sys.node(),
+                                             &sys, std::move(actor_cfg),
+                                             prog, itr->second, spawn_cfg,
+                                             std::move(map_args),
+                                             std::move(map_result),
+                                             std::forward_as_tuple(xs...));
     }
   }
 
-  void enqueue(const actor_addr &sender, message_id mid, message content,
+  void enqueue(strong_actor_ptr sender, message_id mid, message content,
                execution_unit*) override {
     CAF_PUSH_AID(id());
     CAF_LOG_TRACE("");
@@ -145,14 +151,15 @@ public:
     if (! content.match_elements(input_types{})) {
       return;
     }
-    auto hdl = std::make_tuple(this->address(), sender, mid.response_id());
+    auto hdl = std::make_tuple(sender, mid.response_id());
     evnt_vec events;
     args_vec input_buffers;
     args_vec output_buffers;
     size_vec result_sizes;
     add_kernel_arguments(events, input_buffers, output_buffers,
                          result_sizes, content, indices);
-    auto cmd = make_counted<command_type>(std::move(hdl), this,
+    auto cmd = make_counted<command_type>(std::move(hdl),
+                                          actor_cast<strong_actor_ptr>(this),
                                           std::move(events),
                                           std::move(input_buffers),
                                           std::move(output_buffers),

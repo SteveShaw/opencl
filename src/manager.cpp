@@ -30,7 +30,7 @@ using namespace std;
 namespace caf {
 namespace opencl {
 
-const maybe<const device&> manager::get_device(size_t id) const {
+const optional<const device&> manager::get_device(size_t id) const {
   if (platforms_.empty())
     return none;
   size_t to = 0;

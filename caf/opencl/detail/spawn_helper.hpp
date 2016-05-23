@@ -31,7 +31,7 @@ struct tuple_construct { };
 template <class... Ts>
 struct cl_spawn_helper {
   using impl = opencl::actor_facade<Ts...>;
-  using map_in_fun = std::function<maybe<message> (message&)>;
+  using map_in_fun = std::function<optional<message> (message&)>;
   using map_out_fun = typename impl::output_mapping;
 
   actor operator()(actor_config actor_cfg, const opencl::program& p,

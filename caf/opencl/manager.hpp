@@ -25,7 +25,7 @@
 #include <algorithm>
 #include <functional>
 
-#include "caf/maybe.hpp"
+#include "caf/optional.hpp"
 #include "caf/config.hpp"
 #include "caf/actor_system.hpp"
 
@@ -49,11 +49,11 @@ public:
   manager(const manager&) = delete;
   manager& operator=(const manager&) = delete;
   /// Get the device with id, which is assigned sequientally.
-  const maybe<const device&> get_device(size_t id = 0) const;
+  const optional<const device&> get_device(size_t id = 0) const;
   /// Get the first device that satisfies the predicate.
   /// The predicate should accept a `const device&` and return a bool;
   template <class UnaryPredicate>
-  const maybe<const device&> get_device_if(UnaryPredicate p) const {
+  const optional<const device&> get_device_if(UnaryPredicate p) const {
     for (auto& pl : platforms_) {
       for (auto& dev : pl.get_devices()) {
         if (p(dev))
@@ -136,7 +136,7 @@ public:
   actor spawn(const opencl::program& prog,
               const char* fname,
               const opencl::spawn_config& config,
-              std::function<maybe<message> (message&)> map_args,
+              std::function<optional<message> (message&)> map_args,
               Fun map_result,
               Ts... xs) {
     detail::cl_spawn_helper<Ts...> f;
@@ -154,7 +154,7 @@ public:
   actor spawn(const char* source,
               const char* fname,
               const opencl::spawn_config& config,
-              std::function<maybe<message> (message&)> map_args,
+              std::function<optional<message> (message&)> map_args,
               Fun map_result,
               Ts... xs) {
     detail::cl_spawn_helper<Ts...> f;
