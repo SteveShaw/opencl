@@ -46,15 +46,17 @@ class command : public ref_counted {
 public:
   command(std::tuple<strong_actor_ptr,message_id> handle,
           strong_actor_ptr actor_facade,
-          std::vector<cl_event> events, std::vector<mem_ptr> input_buffers,
-          std::vector<mem_ptr> output_buffers, std::vector<size_t> result_sizes,
+          std::vector<cl_event> events, std::vector<mem_ptr> input_bufs,
+          std::vector<mem_ptr> output_bufs, std::vector<mem_ptr> plain_bufs,
+          std::vector<size_t> result_sizes,
           message msg)
       : result_sizes_(std::move(result_sizes)),
         handle_(std::move(handle)),
         actor_facade_(std::move(actor_facade)),
         mem_in_events_(std::move(events)),
-        input_buffers_(std::move(input_buffers)),
-        output_buffers_(std::move(output_buffers)),
+        input_buffers_(std::move(input_bufs)),
+        output_buffers_(std::move(output_bufs)),
+        plain_buffers_(std::move(plain_bufs)),
         msg_(std::move(msg)) {
     // nop
   }
@@ -145,6 +147,7 @@ private:
   std::vector<cl_event> mem_out_events_;
   std::vector<mem_ptr> input_buffers_;
   std::vector<mem_ptr> output_buffers_;
+  std::vector<mem_ptr> plain_buffers_;
   std::tuple<Ts...> result_buffers_;
   message msg_; // required to keep the argument buffers alive (async copy)
 

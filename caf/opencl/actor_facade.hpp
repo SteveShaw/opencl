@@ -154,14 +154,16 @@ public:
     evnt_vec events;
     args_vec input_buffers;
     args_vec output_buffers;
+    args_vec plain_buffers;
     size_vec result_sizes;
-    add_kernel_arguments(events, input_buffers, output_buffers,
+    add_kernel_arguments(events, input_buffers, output_buffers, plain_buffers,
                          result_sizes, content, indices);
     auto cmd = make_counted<command_type>(std::move(hdl),
                                           actor_cast<strong_actor_ptr>(this),
                                           std::move(events),
                                           std::move(input_buffers),
                                           std::move(output_buffers),
+                                          std::move(plain_buffers),
                                           std::move(result_sizes),
                                           std::move(content));
     cmd->enqueue();
@@ -194,8 +196,8 @@ public:
                                            std::multiplies<size_t>{});
   }
 
-  void add_kernel_arguments(evnt_vec&, args_vec&, args_vec&, size_vec&,
-                            message&, detail::int_list<>) {
+  void add_kernel_arguments(evnt_vec&, args_vec&, args_vec&, args_vec&,
+                            size_vec&, message&, detail::int_list<>) {
     // nop
   }
 
@@ -204,17 +206,19 @@ public:
   /// to prevent them from being deleted before our operation finished
   template <long I, long... Is>
   void add_kernel_arguments(evnt_vec& events, args_vec& input_buffers,
-                            args_vec& output_buffers, size_vec& sizes,
-                            message& msg, detail::int_list<I, Is...>) {
+                            args_vec& output_buffers, args_vec& plain_buffers,
+                            size_vec& sizes, message& msg,
+                            detail::int_list<I, Is...>) {
     create_buffer<I>(std::get<I>(argument_types_), events, sizes,
-                     input_buffers, output_buffers, msg);
-    add_kernel_arguments(events, input_buffers, output_buffers, sizes, msg,
-                         detail::int_list<Is...>{});
+                     input_buffers, output_buffers, plain_buffers, msg);
+    add_kernel_arguments(events, input_buffers, output_buffers, plain_buffers,
+                         sizes, msg, detail::int_list<Is...>{});
   }
 
   template <long I, class T>
   void create_buffer(const in<T>&, evnt_vec& events, size_vec&,
-                     args_vec& input_buffers, args_vec&, message& msg) {
+                     args_vec& input_buffers, args_vec&, args_vec&,
+                     message& msg) {
     using container_type = typename detail::tl_at<unpacked_types, I>::type;
     using value_type = typename container_type::value_type;
     auto& value = msg.get_as<container_type>(I);
@@ -235,7 +239,8 @@ public:
 
   template <long I, class T>
   void create_buffer(const in_out<T>&, evnt_vec& events, size_vec& sizes,
-                     args_vec&, args_vec& output_buffers, message& msg) {
+                     args_vec&, args_vec& output_buffers, args_vec&,
+                     message& msg) {
     using container_type = typename detail::tl_at<unpacked_types, I>::type;
     using value_type = typename container_type::value_type;
     auto& value = msg.get_as<container_type>(I);
@@ -257,7 +262,8 @@ public:
 
   template <long I, class T>
   void create_buffer(const out<T>& wrapper, evnt_vec&, size_vec& sizes,
-                     args_vec&, args_vec& output_buffers, message& msg) {
+                     args_vec&, args_vec& output_buffers, args_vec&,
+                     message& msg) {
     using container_type = typename detail::tl_at<unpacked_types, I>::type;
     using value_type = typename container_type::value_type;
     auto size = get_size_for_argument(wrapper, msg, default_output_size_);
@@ -270,6 +276,22 @@ public:
     v1callcl(CAF_CLF(clSetKernelArg), kernel_.get(), static_cast<unsigned>(I),
              sizeof(cl_mem), static_cast<void*>(&output_buffers.back()));
     sizes.push_back(size);
+  }
+
+  template <long I, class T>
+  void create_buffer(const buffer<T>& wrapper, evnt_vec&, size_vec&,
+                     args_vec&, args_vec&, args_vec& plain_buffers, message&) {
+    using container_type = typename detail::tl_at<unpacked_types, I>::type;
+    using value_type = typename container_type::value_type;
+    auto size = wrapper.size_;
+    auto buffer_size = sizeof(value_type) * size;
+    auto buffer = v2get(CAF_CLF(clCreateBuffer), context_.get(),
+                        cl_mem_flags{CL_MEM_READ_WRITE}, buffer_size, nullptr);
+    mem_ptr tmp;
+    tmp.reset(buffer, false);
+    plain_buffers.push_back(tmp);
+    v1callcl(CAF_CLF(clSetKernelArg), kernel_.get(), static_cast<unsigned>(I),
+             sizeof(cl_mem), static_cast<void*>(&plain_buffers.back()));
   }
 
   template <class Fun>
@@ -291,5 +313,5 @@ public:
 
 } // namespace opencl
 } // namespace caf
-
 #endif // CAF_OPENCL_ACTOR_FACADE_HPP
+

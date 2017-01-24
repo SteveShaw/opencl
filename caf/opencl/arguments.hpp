@@ -72,6 +72,12 @@ struct out {
   std::function<optional<size_t> (message&)> fun_;
 };
 
+template <class Arg>
+struct buffer {
+  using arg_type = typename std::decay<Arg>::type;
+  buffer(size_t size) : size_{size} { }
+  size_t size_;
+};
 
 ///Cconverts C arrays, i.e., pointers, to vectors.
 template <class T>
@@ -97,6 +103,8 @@ struct is_opencl_arg<in_out<T>> : std::true_type {};
 template <class T>
 struct is_opencl_arg<out<T>> : std::true_type {};
 
+template <class T>
+struct is_opencl_arg<buffer<T>> : std::true_type {};
 
 /// Filter type lists for input arguments, in and in_out.
 template <class T>
@@ -125,6 +133,9 @@ struct requires_size_arg : std::false_type {};
 template <class T>
 struct requires_size_arg<out<T>> : std::true_type {};
 
+template <class T>
+struct requires_size_arg<buffer<T>> : std::true_type {};
+
 /// extract types
 template <class T>
 struct extract_type { };
@@ -141,6 +152,11 @@ struct extract_type<in_out<T>> {
 
 template <class T>
 struct extract_type<out<T>> {
+  using type = typename std::decay<typename carr_to_vec<T>::type>::type;
+};
+
+template <class T>
+struct extract_type<buffer<T>> {
   using type = typename std::decay<typename carr_to_vec<T>::type>::type;
 };
 

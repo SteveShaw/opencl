@@ -32,6 +32,7 @@ constexpr const char* kernel_name_compiler_flag = "compiler_flag";
 constexpr const char* kernel_name_reduce = "reduce";
 constexpr const char* kernel_name_const = "const_mod";
 constexpr const char* kernel_name_inout = "times_two";
+constexpr const char* kernel_name_buffer = "times_two";
 
 constexpr const char* compiler_flag = "-D CAF_OPENCL_TEST_FLAG";
 
@@ -102,6 +103,16 @@ constexpr const char* kernel_source_inout = R"__(
   __kernel void times_two(__global int* values) {
     size_t idx = get_global_id(0);
     values[idx] = values[idx] * 2;
+  }
+)__";
+
+constexpr const char* kernel_source_buffer = R"__(
+  __kernel void times_two(__global int* values,
+                          __global int* buf) {
+    size_t idx = get_global_id(0);
+    buf[idx] = values[idx];
+    buf[idx] += values[idx];
+    values[idx] = buf[idx];
   }
 )__";
 
@@ -302,7 +313,7 @@ void test_opencl(actor_system& sys) {
   CAF_MESSAGE("Expecting exception (compiling invalid kernel, "
               "semicolon is missing).");
   try {
-    auto create_error = mngr.create_program(kernel_source_error);
+    /* auto create_error = */ mngr.create_program(kernel_source_error);
   }
   catch (const exception& exc) {
     auto cond = (strcmp("clBuildProgram: CL_BUILD_PROGRAM_FAILURE",
@@ -401,6 +412,25 @@ void test_opencl(actor_system& sys) {
   self->receive(
     [&](const ivec& result) {
       check_vector_results("Testing in_out arugment", expected9, result);
+    },
+    others >> [&](message_view& x) -> result<message> {
+      CAF_ERROR("unexpected message" << x.content().stringify());
+      return sec::unexpected_message;
+    }
+  );
+  // test buffer argument type
+  ivec input10 = make_iota_vector<int>(problem_size);
+  ivec expected10{input10};
+  transform(begin(expected10), end(expected10), begin(expected10),
+                 [](const int& val){ return val * 2; });
+  auto w10 = mngr.spawn(kernel_source_buffer, kernel_name_buffer,
+                        spawn_config{dims{problem_size}},
+                        opencl::in_out<ivec>{},
+                        opencl::buffer<ivec>{problem_size});
+  self->send(w10, move(input10));
+  self->receive(
+    [&](const ivec& result) {
+      check_vector_results("Testing buffer arugment", expected10, result);
     },
     others >> [&](message_view& x) -> result<message> {
       CAF_ERROR("unexpected message" << x.content().stringify());
