@@ -286,7 +286,8 @@ public:
     auto size = wrapper.size_;
     auto buffer_size = sizeof(value_type) * size;
     auto buffer = v2get(CAF_CLF(clCreateBuffer), context_.get(),
-                        cl_mem_flags{CL_MEM_READ_WRITE}, buffer_size, nullptr);
+                        cl_mem_flags{CL_MEM_READ_WRITE | CL_MEM_HOST_NO_ACCESS},
+                        buffer_size, nullptr);
     mem_ptr tmp;
     tmp.reset(buffer, false);
     plain_buffers.push_back(tmp);
