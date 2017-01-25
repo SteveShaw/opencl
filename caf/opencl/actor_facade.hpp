@@ -225,7 +225,8 @@ public:
     auto size = value.size();
     size_t buffer_size = sizeof(value_type) * size;
     auto buffer = v2get(CAF_CLF(clCreateBuffer), context_.get(),
-                        cl_mem_flags{CL_MEM_READ_WRITE}, buffer_size, nullptr);
+                        cl_mem_flags{CL_MEM_READ_WRITE | CL_MEM_HOST_WRITE_ONLY},
+                        buffer_size, nullptr);
     auto event = v1get<cl_event>(CAF_CLF(clEnqueueWriteBuffer),
                                  queue_.get(), buffer, cl_bool{CL_FALSE},
                                  cl_uint{0}, buffer_size, value.data());
