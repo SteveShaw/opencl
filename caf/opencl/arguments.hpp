@@ -74,9 +74,23 @@ struct out {
 
 template <class Arg>
 struct buffer {
-  using arg_type = typename std::decay<Arg>::type;
-  buffer(size_t size) : size_{size} { }
-  size_t size_;
+  buffer() = default;
+  template <class F>
+  buffer(F fun) {
+    fun_ = [fun](message& msg) -> optional<size_t> {
+      auto res = msg.apply(fun);
+      size_t result;
+      if (res) {
+        res->apply([&](size_t x) { result = x; });
+        return result;
+      }
+      return none;
+    };
+  }
+  optional<size_t> operator()(message& msg) const {
+    return fun_ ? fun_(msg) : 0UL;
+  }
+  std::function<optional<size_t> (message&)> fun_;
 };
 
 ///Cconverts C arrays, i.e., pointers, to vectors.
@@ -126,7 +140,7 @@ struct is_output_arg<out<T>> : std::true_type {};
 template <class T>
 struct is_output_arg<in_out<T>> : std::true_type {};
 
-/// Filter for arguments that require size, in this case only out.
+/// Filter for arguments that require size; out & buffer
 template <class T>
 struct requires_size_arg : std::false_type {};
 

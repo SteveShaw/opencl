@@ -423,10 +423,13 @@ void test_opencl(actor_system& sys) {
   ivec expected10{input10};
   transform(begin(expected10), end(expected10), begin(expected10),
                  [](const int& val){ return val * 2; });
+  auto get_result_size_10 = [=](const ivec& input) {
+    return input.size();
+  };
   auto w10 = mngr.spawn(kernel_source_buffer, kernel_name_buffer,
                         spawn_config{dims{problem_size}},
                         opencl::in_out<ivec>{},
-                        opencl::buffer<ivec>{problem_size});
+                        opencl::buffer<ivec>{get_result_size_10});
   self->send(w10, move(input10));
   self->receive(
     [&](const ivec& result) {

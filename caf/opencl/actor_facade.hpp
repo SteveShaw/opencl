@@ -282,10 +282,11 @@ public:
 
   template <long I, class T>
   void create_buffer(const buffer<T>& wrapper, evnt_vec&, size_vec&,
-                     args_vec&, args_vec&, args_vec& plain_buffers, message&) {
+                     args_vec&, args_vec&, args_vec& plain_buffers,
+                     message& msg) {
     using container_type = typename detail::tl_at<unpacked_types, I>::type;
     using value_type = typename container_type::value_type;
-    auto size = wrapper.size_;
+    auto size = get_size_for_argument(wrapper, msg, default_output_size_);
     auto buffer_size = sizeof(value_type) * size;
     auto buffer = v2get(CAF_CLF(clCreateBuffer), context_.get(),
                         cl_mem_flags{CL_MEM_READ_WRITE | CL_MEM_HOST_NO_ACCESS},
